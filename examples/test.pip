@@ -1,0 +1,10 @@
+= 'fizzBuzz (
+    = 'fizz? '(>> mod 5 == 0),
+    = 'buzz? '(>> mod 7 == 0),
+
+    >> to fizz? and buzz? and 'FizzBuzz
+       or fizz? and 'Fizz
+       or buzz? and 'Buzz
+       or '
+),
+>> to 0 range 100 map fizzBuzz
