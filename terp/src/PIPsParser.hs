@@ -32,7 +32,7 @@ stringBlock = do
     spaces
     return $ StringLiteral content
 
-stringLiteral = stringBlock
+stringLiteral = (try stringBlock) <|> (try word)
 
 scopeLookup :: GenParser Char st ASTNode
 scopeLookup = do

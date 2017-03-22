@@ -1,10 +1,11 @@
 = 'fizzBuzz (
-    = 'fizz? '(>> mod 5 == 0),
-    = 'buzz? '(>> mod 7 == 0),
+    >>>
+        = 'fizz? '(>> mod 5 == 0)
+        = 'buzz? '(>> mod 7 == 0),
 
     >> to fizz? and buzz? and 'FizzBuzz
        or fizz? and 'Fizz
        or buzz? and 'Buzz
-       or '
+       or ""
 ),
->> to 0 range 100 map fizzBuzz
+>> to 1 range 100 map fizzBuzz filter (!== "")

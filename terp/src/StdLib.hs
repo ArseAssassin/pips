@@ -87,6 +87,8 @@ store ((PRoutine fn):[]) it =
     PAssignScope [(PString "it", it)] False fn
 store args val = argError "store" "any -> any, any" args val
 
+not' [] (PBool a) = PBool $ not a
+
 identity _ value = value
 
 lt (PNum b:[]) (PNum a) = PBool $ a < b
@@ -111,6 +113,7 @@ defaultExpressions =
         ("*", multiply),
         ("<", lt),
         (">", gt),
+        ("prepend", \args value -> PList (value : args)),
         ("head", head'),
         ("tail", tail'),
         ("comment", identity),
@@ -121,6 +124,8 @@ defaultExpressions =
         (">n", pipe),
         ("fn", fn),
         ("==", eq),
+        ("!==", \args value -> not' [] (eq args value)),
+        ("!", not'),
         ("mod", mod'),
         ("range", range),
         ("curry", curry'),

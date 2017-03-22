@@ -31,7 +31,7 @@ eval (Expression nodes) scope value =
             PAssignScope def _ _ ->
                 case eval ast newScope val of
                     PAssignScope _ shouldUpgradeScope (PExpression fn) ->
-                        (fn [] val, (if shouldUpgradeScope then newScope else scope))
+                        (PScope newScope, (if shouldUpgradeScope then newScope else scope))
                 where newScope = Scope def scope
             x -> (x, scope)
         ) (value, scope) nodes
