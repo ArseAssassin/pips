@@ -1,11 +1,4 @@
-= 'fizzBuzz (
-    >>>
-        = 'fizz? '(>> mod 5 == 0)
-        = 'buzz? '(>> mod 7 == 0),
-
-    >> to fizz? and buzz? and 'FizzBuzz
-       or fizz? and 'Fizz
-       or buzz? and 'Buzz
-       or ""
-),
->> to 1 range 100 map fizzBuzz filter (!== "")
+= 'fizzBuzz '(scope (
+    = 'fizz? '(to it)
+)),
+>> to 1 range 10 map fizzBuzz

@@ -3,7 +3,7 @@ module Runtime where
 import Data.List (find)
 
 type PArgs = [PValue]
-type Expression = (PArgs -> PValue -> PValue)
+type Expression = (Scope -> PArgs -> PValue -> PValue)
 
 data PExpression =
     PExpression Expression
@@ -20,7 +20,8 @@ data PValue =
     PError String |
     PObject Object |
     PRoutine PExpression |
-    PAssignScope Object Bool PExpression |
+    PAssignScope Scope |
+    PEval PExpression Scope |
     PScope Scope |
     PList [PValue] |
     PBool Bool deriving (Show, Eq)

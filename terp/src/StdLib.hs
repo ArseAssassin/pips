@@ -5,104 +5,99 @@ import Runtime
 argError _ _ _ (PError error) = (PError error)
 argError name expected args value = PError $ "Invalid arguments: " ++ name ++ " expects " ++ expected ++ " as argument but received " ++ (show value) ++ ", " ++ (show args)
 
-plus [(PNum b)] (PNum a) =  PNum $ a + b
-plus args val = argError "+" "Number" args val
+plus _ [(PNum b)] (PNum a) =  PNum $ a + b
+plus _ args val = argError "+" "Number" args val
 
-minus [(PNum b)] (PNum a) =  PNum $ a - b
-minus args val = argError "-" "Number" args val
+minus _ [(PNum b)] (PNum a) =  PNum $ a - b
+minus _ args val = argError "-" "Number" args val
 
-multiply [(PNum b)] (PNum a) = PNum $ a * b
+multiply _ [(PNum b)] (PNum a) = PNum $ a * b
 
-to [value] _ = value
-to args val = argError "to" "[]" args val
+to _ [value] _ = value
+to _ args val = argError "to" "[]" args val
 
-put (name:value:[]) _ = PAssignScope [(name, value)] True (PExpression (\_ val -> val))
+put _ (name:value:[]) (PScope scope) =
+    PAssignScope newScope
+    where newScope = putInScope name value scope
 
-put [] val = argError "=" "String, Function" "[]" val
-put args val = argError "=" "String, Function" args val
+put _ [] val = argError "=" "String, Function" "[]" val
+put _ args val = argError "=" "String, Function" args val
 
-and' [_] (PBool False) = (PBool False)
-and' [expression] (PBool True) = expression
-and' _ it = it
+and' _ [_] (PBool False) = (PBool False)
+and' _ [expression] (PBool True) = expression
+and' _ _ it = it
 
-or' [expression] (PBool False) = expression
-or' _ value = value
+or' _ [expression] (PBool False) = expression
+or' _ _ value = value
 
-pipe [_] value = value
-pipe ((PNum i):(PRoutine (PExpression fn)):xs) value =
-    connectPipe value $ pipe ((PNum i) : (drop i xs)) (fn args value)
+pipe _ [_] value = value
+pipe scope ((PNum i):(PRoutine (PExpression fn)):xs) value =
+    pipe scope ((PNum i) : (drop i xs)) (fn scope args value)
     where args = (take i xs)
 
-pipe args val = argError "pipe" "[any, num:args]" args val
-
-connectPipe (PAssignScope oldDef _ _)
-            (PAssignScope newDef shouldUpdate it) =
-            PAssignScope (oldDef ++ newDef) shouldUpdate it
+pipe _ args val = argError "pipe" "[any, num:args]" args val
 
 connectPipe _ next = next
 
-mod' (PNum b:[]) (PNum a) = PNum $ mod a b
-mod' args val = argError "mod" "Num, Num" args val
+mod' _ (PNum b:[]) (PNum a) = PNum $ mod a b
+mod' _ args val = argError "mod" "Num, Num" args val
 
-eq (arg:[]) val = PBool $ arg == val
+eq _ (arg:[]) val = PBool $ arg == val
 
-range ((PNum max):[]) (PNum i) =
+range _ ((PNum max):[]) (PNum i) =
     PList $ map PNum [i..max]
 
-curry' (PRoutine (PExpression fn):args) _ =
-    PRoutine $ PExpression (\newArgs value -> fn (args ++ newArgs) value)
+curry' _ (PRoutine (PExpression fn):args) _ =
+    PRoutine $ PExpression (\scope newArgs value -> fn scope (args ++ newArgs) value)
 
-foldl' (startValue:(PRoutine (PExpression fn)):[]) (PList list) =
-    foldl (\memo next -> fn [next] memo) startValue list
+foldl' scope (startValue:(PRoutine (PExpression fn)):[]) (PList list) =
+    foldl (\memo next -> fn scope [next] memo) startValue list
 
 
-map' ((PRoutine (PExpression fn)):[]) (PList values) =
-        PList $ map (\val -> fn [] val) values
-map' args val = argError "map" "[Any], Any -> Any" args val
+map' scope ((PRoutine (PExpression fn)):[]) (PList values) =
+        PList $ map (\val -> fn scope [] val) values
+map' _ args val = argError "map" "[Any], Any -> Any" args val
 
-filter' routine@(PRoutine (PExpression fn):[]) (PList (val:rest)) =
-    case fn [] val of
+filter' :: Expression
+filter' scope routine@(PRoutine (PExpression fn):[]) (PList (val:rest)) =
+    case fn scope [] val of
         PBool isValid ->
-            case filter' routine (PList rest) of
+            case filter' scope routine (PList rest) of
                 PList filtered -> PList (if isValid then (val : filtered) else filtered)
 
         PError it -> PError it
         it -> it
 
-filter' _ (PList []) = PList []
+filter' _ _ (PList []) = PList []
 
-filter' args val = argError "filter" "any -> Boolean, List" args val
+filter' _ args val = argError "filter" "any -> Boolean, List" args val
 
-fn names _ =
+fn _ names (PScope scope) =
     case last names of
         (PRoutine (PExpression fn)) ->
-            PRoutine $ PExpression (\args _ ->
-                PAssignScope
-                    (zip (take ((length names) - 1) names) args)
-                    False
-                    (PExpression fn)
+            PRoutine $ PExpression (\_ args _ ->
+                PAssignScope scope
             )
 
-store ((PRoutine fn):[]) it =
-    PAssignScope [(PString "it", it)] False fn
-store args val = argError "store" "any -> any, any" args val
 
-not' [] (PBool a) = PBool $ not a
+not' _ [] (PBool a) = PBool $ not a
 
-identity _ value = value
+identity _ _ value = value
 
-lt (PNum b:[]) (PNum a) = PBool $ a < b
-lt args val = argError "<" "Num, Num" args val
+lt _ (PNum b:[]) (PNum a) = PBool $ a < b
+lt _ args val = argError "<" "Num, Num" args val
 
-gt (PNum b:[]) (PNum a) = PBool $ a > b
+gt _ (PNum b:[]) (PNum a) = PBool $ a > b
 
-head' [] (PList (a:_)) = a
-head' args val = argError "head" "List" args val
+head' _ [] (PList (a:_)) = a
+head' _ args val = argError "head" "List" args val
 
-tail' [] (PList a) = PList $ tail a
-tail' args value = argError "tail" "list, list" args value
+tail' _ [] (PList a) = PList $ tail a
+tail' _ args value = argError "tail" "list, list" args value
 
-list args _ = PList args
+prepend _ (value:[]) (PList a) = PList $ value : a
+
+list _ args _ = PList args
 
 quoteNames = map $ \(name, value) -> (PString name, value)
 
@@ -113,18 +108,17 @@ defaultExpressions =
         ("*", multiply),
         ("<", lt),
         (">", gt),
-        ("prepend", \args value -> PList (value : args)),
+        ("prepend", prepend),
         ("head", head'),
         ("tail", tail'),
         ("comment", identity),
         ("foldl", foldl'),
-        ("store", store),
-        (">>", \args value -> pipe ((PNum 1) : args) value),
-        (">>>", \args value -> pipe ((PNum 2) : args) value),
+        (">>", \scope args value -> pipe scope ((PNum 1) : args) value),
+        (">>>", \scope args value -> pipe scope ((PNum 2) : args) value),
         (">n", pipe),
         ("fn", fn),
         ("==", eq),
-        ("!==", \args value -> not' [] (eq args value)),
+        ("!==", \scope args value -> not' scope [] (eq scope args value)),
         ("!", not'),
         ("mod", mod'),
         ("range", range),

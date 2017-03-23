@@ -12,7 +12,7 @@ eval :: ASTNode -> Scope -> PValue -> PValue
 eval (Term (fn:args)) scope value =
         case eval fn scope value of
             PRoutine (PExpression fn') ->
-                fn' (map (\astNode ->
+                fn' scope (map (\astNode ->
                     eval astNode scope value
                 ) args) value
             PError it -> PError it
@@ -21,18 +21,14 @@ eval (Term (fn:args)) scope value =
 
 eval (ExpressionLiteral expression) scope _ =
     PRoutine $ PExpression (
-        \_ value ->
+        \_ _ value ->
             eval expression scope value
     )
 
 eval (Expression nodes) scope value =
     fst $ foldl (\(val, scope) ast ->
         case eval ast scope val of
-            PAssignScope def _ _ ->
-                case eval ast newScope val of
-                    PAssignScope _ shouldUpgradeScope (PExpression fn) ->
-                        (PScope newScope, (if shouldUpgradeScope then newScope else scope))
-                where newScope = Scope def scope
+            PAssignScope newScope -> (PScope newScope, newScope)
             x -> (x, scope)
         ) (value, scope) nodes
 
