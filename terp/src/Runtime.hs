@@ -3,10 +3,11 @@ module Runtime where
 import Data.List (find)
 
 type PArgs = [PValue]
-type Expression = (Scope -> PArgs -> PValue -> PValue)
+type Expression = (PArgs -> PValue -> PValue)
 
 data PExpression =
-    PExpression Expression
+    PExpression Expression |
+    PGetScope (Scope -> PValue)
 
 instance Eq PExpression where
     _ == _ = False
@@ -21,7 +22,6 @@ data PValue =
     PObject Object |
     PRoutine PExpression |
     PAssignScope Scope |
-    PEval PExpression Scope |
     PScope Scope |
     PList [PValue] |
     PBool Bool deriving (Show, Eq)

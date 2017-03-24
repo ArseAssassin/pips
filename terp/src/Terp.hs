@@ -8,11 +8,15 @@ runScript :: ASTNode -> PValue
 runScript node =
     eval node defaultScope (PScope defaultScope)
 
+processValue ((PAssignScope newScope), _) = (PScope newScope, newScope)
+processValue ((PRoutine (PGetScope fn)), scope) = processValue ((fn scope), scope)
+processValue it = it
+
 eval :: ASTNode -> Scope -> PValue -> PValue
 eval (Term (fn:args)) scope value =
         case eval fn scope value of
             PRoutine (PExpression fn') ->
-                fn' scope (map (\astNode ->
+                fn' (map (\astNode ->
                     eval astNode scope value
                 ) args) value
             PError it -> PError it
@@ -21,16 +25,12 @@ eval (Term (fn:args)) scope value =
 
 eval (ExpressionLiteral expression) scope _ =
     PRoutine $ PExpression (
-        \_ _ value ->
+        \_ value ->
             eval expression scope value
     )
 
 eval (Expression nodes) scope value =
-    fst $ foldl (\(val, scope) ast ->
-        case eval ast scope val of
-            PAssignScope newScope -> (PScope newScope, newScope)
-            x -> (x, scope)
-        ) (value, scope) nodes
+    fst $ foldl (\it@(val, scope) ast -> processValue (eval ast scope val, scope)) (value, scope) nodes
 
 eval (Lookup name) scope _ = findFromScope (PString name) scope
 eval (NumLiteral num) _ _ = PNum num
