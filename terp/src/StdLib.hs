@@ -56,6 +56,10 @@ foldl' (startValue:(PRoutine (PExpression fn)):[]) (PList list) =
 
 map' ((PRoutine (PExpression fn)):[]) (PList values) =
         PList $ map (\val -> fn [] val) values
+map' ((PRoutine (PFunction fn)):[]) (PList values) =
+    PRoutine $ PGetScope (\scope ->
+        PList $ map (\val -> fn (putInScope (PString "args") (PList []) scope) val) values
+    )
 map' args val = argError "map" "[Any], Any -> Any" args val
 
 filter' routine@(PRoutine (PExpression fn):[]) (PList (val:rest)) =
@@ -80,6 +84,16 @@ adjust (PNum i:PRoutine (PExpression fn):[]) (PList it) =
     PList (take i it ++ (fn [] (it !! i)) : drop (i + 1) it)
 
 str [] val = PString (show val)
+
+apply (PRoutine (PExpression fn):(PList args):[]) value =
+    fn args value
+apply args value = argError "apply" "Any -> Any, List, Any" args value
+
+flatten' :: Expression
+flatten' [] (PList ((PList a):(PList b):xs)) =
+    flatten' [] $ PList $ (a ++ b) ++ xs
+
+flatten' [] it@(PList []) = it
 
 fn names (PScope scope) =
     case last names of
@@ -109,7 +123,11 @@ getElement [PNum i] (PList it) = it !! i
 
 list args _ = PList args
 
-scope' [] val = PRoutine $ PGetScope (\scope -> PAssignScope $ putInScope (PString "it") val scope)
+take' (PNum i:[]) (PList it) = PList $ take i it
+last' [] (PList it) = last it
+
+scope' [] val = PRoutine $ PGetScope
+    (\scope -> PAssignScope $ putInScope (PString "it") val scope)
 
 zip' [(PList b)] (PList a) = PList $ map (\(a, b) -> PList [a, b]) $ zip a b
 zip' args val = argError "zip" "list, list" args val
@@ -124,11 +142,14 @@ defaultExpressions =
         ("<", lt),
         (">", gt),
         ("adjust", adjust),
+        ("apply", apply),
         ("zip", zip'),
         (".", getElement),
         ("prepend", prepend),
         ("head", head'),
         ("tail", tail'),
+        ("take", take'),
+        ("last", last'),
         ("comment", identity),
         ("foldl", foldl'),
         ("join", join),

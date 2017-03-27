@@ -7,13 +7,16 @@ type Expression = (PArgs -> PValue -> PValue)
 
 data PExpression =
     PExpression Expression |
+    PFunction (Scope -> PValue -> PValue) |
     PGetScope (Scope -> PValue)
 
 instance Eq PExpression where
     _ == _ = False
 
 instance Show PExpression where
-    show _ = "PExpression"
+    show (PExpression _) = "PExpression"
+    show (PFunction _) = "PFunction"
+    show (PGetScope _) = "PGetScope"
 
 data PValue =
     PNum Int |
@@ -21,6 +24,7 @@ data PValue =
     PError String |
     PObject Object |
     PRoutine PExpression |
+    PLookup PValue |
     PAssignScope Scope |
     PScope Scope |
     PList [PValue] |
@@ -36,7 +40,6 @@ findValue name object =
         Nothing -> PError ("Couldn't find key ")
         Just (_, x) -> x
 
-findFromScope :: PValue -> Scope -> PValue
 findFromScope name NoScope = PError $ "Tried looking up non-existent value from scope " ++ (show name)
 findFromScope name (Scope content parent) =
     case findValue name content of
@@ -44,5 +47,5 @@ findFromScope name (Scope content parent) =
         x -> x
 
 putInScope :: PValue -> PValue -> Scope -> Scope
-putInScope name value (Scope content parent) =
-    Scope ((name, value) : content) parent
+putInScope name value parent =
+    Scope [(name, value)] parent
