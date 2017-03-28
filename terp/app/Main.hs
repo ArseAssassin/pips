@@ -2,7 +2,7 @@ module Main where
 
 import System.Environment (getArgs)
 
-import Lib (parsePIPs, runScript, PValue(PError))
+import Lib (parsePIPs, runScript, PValue(PError), defaultScope)
 
 main :: IO ()
 main = do
@@ -15,6 +15,6 @@ main = do
         Left e -> do putStrLn "Error parsing input:"
                      print e
         Right it -> putStrLn
-            (case runScript it of
+            (case runScript it defaultScope of
                 PError typeName it -> (show typeName) ++ ": \n" ++ it
                 it -> show it)

@@ -100,7 +100,7 @@ putName name value = PMeta (PString "name") name value
 resolvingArgs adapt =
     map (\(name, fn) -> (name, putName name $ PFunction (
         \scope value ->
-            case unmeta' value of
+            case unmeta value of
                 PError errorType it -> PError errorType it
                 _ -> case findFromScope (PString "args") scope of
                     Just (PList args) -> adapt fn args scope value
@@ -112,7 +112,7 @@ len args value = argError "len" "[Any]" args value
 
 defaultExpressions :: Object
 defaultExpressions =
-    resolvingArgs (\fn args _ value -> fn (map unmeta' args) (unmeta' value))
+    resolvingArgs (\fn args _ value -> fn (map unmeta args) (unmeta value))
     $ quoteNames [
         ("+", plus),
         ("*", multiply),
@@ -179,7 +179,7 @@ filter' args _ val = argError "filter" "any -> Boolean, List" args val
 
 
 scopeExpressions =
-    resolvingArgs (\fn args scope value -> fn (map unmeta' args) scope (unmeta' value))
+    resolvingArgs (\fn args scope value -> fn (map unmeta args) scope (unmeta value))
     $ quoteNames [
         (">>", \args scope value -> pipe ((PNum 1) : args) scope value),
         (">>>", \args scope value -> pipe ((PNum 2) : args) scope value),
@@ -199,12 +199,15 @@ meta (name:[]) scope (PMeta metaName value child) =
     if metaName == name then value else meta [name] scope child
 meta (name:[]) _ value = PError (PString "LookupError") $ "Metadata " ++ (show name) ++ " not found from " ++ (show value)
 
-unmeta [] _ it = unmeta' it
-unmeta' (PMeta _ _ it) = unmeta' it
-unmeta' any = any
+unmeta (PMeta _ _ it) = unmeta it
+unmeta any = any
+unmeta' [] _ it = unmeta it
 
-doc (doc:[]) = meta [PString "doc", doc]
-doc [] = meta [PString "doc"]
+doc (doc:[]) scope value = meta [PString "doc", doc] scope value
+doc [] scope value =
+    case meta [PString "doc"] scope value of
+        PError error _ -> PError error $ "No documentation attached to " ++ (show $ unmeta value)
+        it -> it
 
 put' (name:value:xs) = (name, PMeta (PString "name") name value) : (put' xs)
 put' [] = []
@@ -230,8 +233,9 @@ metaExpressions =
     $ quoteNames [
         ("meta", meta),
         ("=", put),
-        ("unmeta", unmeta),
+        ("unmeta", unmeta'),
         ("doc", doc),
+        ("scope", \_ scope _ -> PScope scope),
         ("and", and'),
         ("or", or'),
         ("to", to)

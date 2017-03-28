@@ -1,8 +1,8 @@
-= 'fizzBuzz (
+= 'fizzBuzz '(
     >>
-        to '(mod 3, == 0) and '(mod 5, == 0) and 'FizzBuzz
-        or '(mod 3, == 0) and 'Fizz
-        or '(mod 5, == 0) and 'Buzz
-        or '(str)
+        to (mod 3, == 0) and (mod 5, == 0) and 'FizzBuzz
+        or (mod 3, == 0) and 'Fizz
+        or (mod 5, == 0) and 'Buzz
+        or (str)
 ),
 >> to 1 range 50, map fizzBuzz, join " "

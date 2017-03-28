@@ -5,8 +5,8 @@ import AST
 import Runtime
 import StdLib
 
-runScript :: ASTNode -> PValue
-runScript it = eval it defaultScope (PScope defaultScope)
+runScript :: ASTNode -> Scope -> PValue
+runScript it scope = eval it scope (PScope scope)
 
 eval :: ASTNode -> Function
 eval (Expression nodes sourcePos) scope value =
@@ -22,12 +22,12 @@ eval (Expression nodes sourcePos) scope value =
     where
         output = snd $ foldl (\(scope, value) astNode ->
             case eval astNode scope value of
-                PAssignScope scope -> (scope, value)
+                value@(PAssignScope scope) -> (scope, value)
                 it -> (scope, it)
             ) (scope, value) nodes
 
 eval (Term (fn:args)) scope value =
-    case unmeta' evaledFn of
+    case unmeta evaledFn of
         PFunction fn ->
             let newVal = fn updatedScope value
             in case newVal of
