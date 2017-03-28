@@ -3,8 +3,8 @@ module StdLib where
 import Runtime
 import Data.List.Split (splitOn)
 
-argError _ _ _ (PError error) = (PError error)
-argError name expected args value = PError $ "Invalid arguments: " ++ name ++ " expects " ++ expected ++ " as argument but received " ++ (show value) ++ " as value, " ++ (show args) ++ " as args"
+argError _ _ _ it@(PError _ _) = it
+argError name expected args value = PError (PString "ArgumentError") $ "Invalid arguments: " ++ name ++ " expects " ++ expected ++ " as argument but received " ++ (show value) ++ " as value, " ++ (show args) ++ " as args"
 
 plus [(PNum b)] (PNum a) =  PNum $ a + b
 plus args val = argError "+" "Number" args val
@@ -95,11 +95,13 @@ split (PString "":[]) (PString s) =
 split (PString separator:[]) (PString s) =
     PList $ map PString $ splitOn separator s
 
+putName name value = PMeta (PString "name") name value
+
 resolvingArgs adapt =
-    map (\(name, fn) -> (name, PFunction (
+    map (\(name, fn) -> (name, putName name $ PFunction (
         \scope value ->
             case unmeta' value of
-                PError it -> PError it
+                PError errorType it -> PError errorType it
                 _ -> case findFromScope (PString "args") scope of
                     Just (PList args) -> adapt fn args scope value
                     Nothing -> adapt fn [] scope value
@@ -125,7 +127,6 @@ defaultExpressions =
         ("take", take'),
         ("drop", drop'),
         ("last", last'),
-
         ("len", len),
         ("comment", identity),
         ("join", join),
@@ -135,7 +136,6 @@ defaultExpressions =
         ("!", not'),
         ("mod", mod'),
         ("range", range),
-
         ("-", minus),
         ("flatten", flatten'),
         ("list", list)
@@ -163,13 +163,14 @@ map' (PFunction fn:[]) scope (PList values) =
         PList $ map (fn (addArgs [] scope)) values
 map' args _ val = argError "map" "[Any], Any -> Any" args val
 
+
 filter' routine@(PFunction fn:[]) scope (PList (val:rest)) =
     case fn scope val of
         PBool isValid ->
             case filter' routine scope (PList rest) of
                 PList filtered -> PList (if isValid then (val : filtered) else filtered)
 
-        PError it -> PError it
+        it@(PError _ _) -> it
         it -> it
 
 filter' _ _ (PList []) = PList []
@@ -196,7 +197,7 @@ meta :: [PValue] -> Scope -> PValue -> PValue
 meta (name:metaValue:[]) _ value = PMeta name metaValue value
 meta (name:[]) scope (PMeta metaName value child) =
     if metaName == name then value else meta [name] scope child
-meta (name:[]) _ value = PError $ "Metadata " ++ (show name) ++ " not found from " ++ (show value)
+meta (name:[]) _ value = PError (PString "LookupError") $ "Metadata " ++ (show name) ++ " not found from " ++ (show value)
 
 unmeta [] _ it = unmeta' it
 unmeta' (PMeta _ _ it) = unmeta' it
@@ -205,12 +206,12 @@ unmeta' any = any
 doc (doc:[]) = meta [PString "doc", doc]
 doc [] = meta [PString "doc"]
 
-put' (name:value:xs) = (name, value) : (put' xs)
+put' (name:value:xs) = (name, PMeta (PString "name") name value) : (put' xs)
 put' [] = []
 
 put args scope _ =
     if (mod (length args) 2) > 0 then
-        PError $ "= expects even number of arguments, received " ++ (show args)
+        PError (PString "ArgumentError") $ "= expects even number of arguments, received " ++ (show args)
     else PAssignScope $ Scope (put' args) scope
 
 to [value] _ _ = value
@@ -236,11 +237,22 @@ metaExpressions =
         ("to", to)
     ]
 
+
+catch scope it@(PError typeName _) =
+    case findFromScope (PString "args") scope of
+        Just (PList (name:value:[])) ->
+            if typeName == name then value else it
+
+catch _ any = any
+
+errorExpressions =
+    quoteNames [("catch", PFunction catch)]
+
 defaultValues :: Object
 defaultValues = quoteNames [("True", PBool True), ("False", PBool False)]
 
 defaultLib :: Object
-defaultLib = concat [defaultExpressions, scopeExpressions, defaultValues, metaExpressions]
+defaultLib = concat [defaultExpressions, scopeExpressions, defaultValues, metaExpressions, errorExpressions]
 
 defaultScope :: Scope
 defaultScope = Scope defaultLib NoScope

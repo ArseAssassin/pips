@@ -1,5 +1,6 @@
 module Terp (runScript) where
 
+import Text.ParserCombinators.Parsec.Pos (sourceName, sourceLine, sourceColumn)
 import AST
 import Runtime
 import StdLib
@@ -8,21 +9,40 @@ runScript :: ASTNode -> PValue
 runScript it = eval it defaultScope (PScope defaultScope)
 
 eval :: ASTNode -> Function
-eval (Expression nodes) scope value =
-    snd $ foldl (\(scope, value) astNode ->
-        case eval astNode scope value of
-            PAssignScope scope -> (scope, value)
-            it -> (scope, it)
-        ) (scope, value) nodes
+eval (Expression nodes sourcePos) scope value =
+    case output of
+        PError typeName it -> PError typeName $
+                it ++
+                "\n  in " ++
+                (sourceName sourcePos) ++
+                ":" ++ (show (sourceLine sourcePos)) ++
+                ":" ++ (show (sourceColumn sourcePos))
+        it -> it
+
+    where
+        output = snd $ foldl (\(scope, value) astNode ->
+            case eval astNode scope value of
+                PAssignScope scope -> (scope, value)
+                it -> (scope, it)
+            ) (scope, value) nodes
 
 eval (Term (fn:args)) scope value =
-    case eval fn updatedScope value of
-        PFunction fn -> fn updatedScope value
-        PError it -> PError it
-        it -> PError $ "Calling invalid function " ++ (show it)
+    case unmeta' evaledFn of
+        PFunction fn ->
+            let newVal = fn updatedScope value
+            in case newVal of
+                PError typeName it ->
+                    case meta [PString "name"] updatedScope evaledFn of
+                        PError _ _ -> PError typeName $ "Error calling anonymous function: \n" ++ it
+                        name -> PError typeName $ "Error calling function named " ++ (show name) ++ ": \n" ++ it
+                it -> it
+        PError typeName it -> PError typeName it
+            -- case meta [PString "name"] updatedScope evaledFn of
+        it -> PError (PString "ValueError") $ "Calling invalid function " ++ (show it)
     where
         evaledArgs = map (\it -> eval it scope value) args
         updatedScope = putInScope (PString "it") value $ putInScope (PString "args") (PList evaledArgs) scope
+        evaledFn = eval fn updatedScope value
 
 eval (ExpressionLiteral astNodes) scope _ =
     PFunction (
@@ -30,10 +50,10 @@ eval (ExpressionLiteral astNodes) scope _ =
             eval astNodes (mergeScopes newScope scope) value
     )
 
-eval (Lookup name) scope value =
+eval (Lookup name) scope _ =
     case findFromScope (PString name) scope of
         Just it -> it
-        Nothing -> PError $ "Couldn't find value " ++ (show name) ++ " from scope"
+        Nothing -> PError (PString "LookupError") $ "Couldn't find value " ++ (show name) ++ " from scope"
 
 eval (NumLiteral i) _ _ = PNum i
 eval (StringLiteral s) _ _ = PString s

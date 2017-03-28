@@ -1,2 +1,1 @@
-= 'inc '(+ 1),
->> to 0 range 10 map inc filter '(> 4)
+to 0, + 'foo, catch 'ArgumentError 2

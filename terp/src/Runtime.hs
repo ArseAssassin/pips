@@ -16,7 +16,7 @@ instance Show Function where
 data PValue =
     PNum Int |
     PString String |
-    PError String |
+    PError PValue String |
     PScope Scope |
     PAssignScope Scope |
     PMeta PValue PValue PValue |

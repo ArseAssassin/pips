@@ -1,13 +1,20 @@
 module Main where
 
-import Lib (parsePIPs, runScript)
+import System.Environment (getArgs)
+
+import Lib (parsePIPs, runScript, PValue(PError))
 
 main :: IO ()
 main = do
-    script <- readFile "../examples/test.pip"
-    let ast = parsePIPs "../examples/test.pip" script
+    args <- getArgs
+    let file = head args
+    script <- readFile file
+    let ast = parsePIPs file script
     -- putStrLn $ (show ast)
     case ast of
         Left e -> do putStrLn "Error parsing input:"
                      print e
-        Right it -> putStrLn $ show $ runScript it
+        Right it -> putStrLn
+            (case runScript it of
+                PError typeName it -> (show typeName) ++ ": \n" ++ it
+                it -> show it)
