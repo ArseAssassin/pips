@@ -16,9 +16,13 @@ anySeparator = valueSeparator <|> termSeparator <|> expressionSeparator
 
 sourcePos = statePos `liftM` getParserState
 
+num = manyTill1 digit valueSeparator
+
 number :: GenParser Char st ASTNode
 number = do
-    content <- manyTill1 digit valueSeparator
+    content <-
+        ((:) <$> (try $ char '-') <*> num) <|> num
+
     return $ NumLiteral (read content)
 
 word :: GenParser Char st ASTNode

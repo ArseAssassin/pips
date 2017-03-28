@@ -1,1 +1,1 @@
->> to 0 + 'foo, catch 'ArgumentError 2
+to 2

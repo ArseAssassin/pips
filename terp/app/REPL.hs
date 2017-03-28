@@ -2,7 +2,7 @@ module REPL where
 
 import System.Console.Haskeline
 
-import Lib (parsePIPs, runScript, PValue(PError, PAssignScope), defaultScope, unmeta)
+import Lib (parsePIPs, runScript, PValue(PError, PAssignScope), defaultScope)
 
 main = runInputT defaultSettings $ loop defaultScope
    where
@@ -22,11 +22,13 @@ main = runInputT defaultSettings $ loop defaultScope
                             case runScript it scope of
                                 PError typeName it -> do
                                     outputStrLn $ (show $ typeName) ++ ": \n" ++ it
+                                    outputStrLn ""
                                     loop scope
 
                                 PAssignScope scope -> do
                                     loop scope
 
                                 it -> do
-                                    outputStrLn $ show $ unmeta it
+                                    outputStrLn $ show $ it
+                                    outputStrLn ""
                                     loop scope

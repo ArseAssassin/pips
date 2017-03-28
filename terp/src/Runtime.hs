@@ -22,7 +22,18 @@ data PValue =
     PMeta PValue PValue PValue |
     PFunction Function |
     PList [PValue] |
-    PBool Bool deriving (Eq, Show)
+    PBool Bool deriving (Eq)
+
+instance Show PValue where
+    show (PNum it) = (show it)
+    show (PString it) = show it
+    show (PError value it) = "PError " ++ (show value) ++ " " ++ it
+    show (PScope _) = "PScope"
+    show (PAssignScope _) = "PAssignScope"
+    show (PMeta _ _ value) = show value
+    show (PFunction _) = "PFunction"
+    show (PList values) = "(list " ++ (unwords $ map show values) ++ ")"
+    show (PBool it) = (show it)
 
 
 putInScope :: PValue -> PValue -> Scope -> Scope
