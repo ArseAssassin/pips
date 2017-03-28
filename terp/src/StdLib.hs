@@ -1,10 +1,10 @@
 module StdLib where
 
 import Runtime
-import Data.List (intercalate)
+import Data.List.Split (splitOn)
 
 argError _ _ _ (PError error) = (PError error)
-argError name expected args value = PError $ "Invalid arguments: " ++ name ++ " expects " ++ expected ++ " as argument but received " ++ (show value) ++ ", " ++ (show args)
+argError name expected args value = PError $ "Invalid arguments: " ++ name ++ " expects " ++ expected ++ " as argument but received " ++ (show value) ++ " as value, " ++ (show args) ++ " as args"
 
 plus [(PNum b)] (PNum a) =  PNum $ a + b
 plus args val = argError "+" "Number" args val
@@ -14,30 +14,14 @@ minus args val = argError "-" "Number" args val
 
 multiply [(PNum b)] (PNum a) = PNum $ a * b
 
-to [value] _ = value
-to args val = argError "to" "[]" args val
 
-put (name:value:xs) (PScope scope) =
-    put xs $ PScope (putInScope name value scope)
+pipe :: [PValue] -> Scope -> PValue -> PValue
+pipe [_] scope value = value
+pipe ((PNum i):(PFunction fn):xs) scope value =
+    pipe ((PNum i) : (drop i xs)) scope (fn (addArgs args scope) value)
+    where args = take i xs
 
-put [] it@(PScope scope) = PAssignScope scope
-put args val = argError "=" "String, Function" args val
-
-and' [_] (PBool False) = (PBool False)
-and' [expression] (PBool True) = expression
-and' _ it = it
-
-or' [expression] (PBool False) = expression
-or' _ value = value
-
-pipe [_] value = value
-pipe ((PNum i):(PRoutine (PExpression fn)):xs) value =
-    pipe ((PNum i) : (drop i xs)) (fn args value)
-    where args = (take i xs)
-
-pipe args val = argError "pipe" "[any, num:args]" args val
-
-connectPipe _ next = next
+pipe args _ val = argError "pipe" "Any, [Fn, Any]" args val
 
 mod' (PNum b:[]) (PNum a) = PNum $ mod a b
 mod' args val = argError "mod" "Num, Num" args val
@@ -47,60 +31,28 @@ eq (arg:[]) val = PBool $ arg == val
 range ((PNum max):[]) (PNum i) =
     PList $ map PNum [i..max]
 
-curry' (PRoutine (PExpression fn):args) _ =
-    PRoutine $ PExpression (\newArgs value -> fn (args ++ newArgs) value)
-
-foldl' (startValue:(PRoutine (PExpression fn)):[]) (PList list) =
-    foldl (\memo next -> fn [next] memo) startValue list
-
-
-map' ((PRoutine (PExpression fn)):[]) (PList values) =
-        PList $ map (\val -> fn [] val) values
-map' ((PRoutine (PFunction fn)):[]) (PList values) =
-    PRoutine $ PGetScope (\scope ->
-        PList $ map (\val -> fn (putInScope (PString "args") (PList []) scope) val) values
-    )
-map' args val = argError "map" "[Any], Any -> Any" args val
-
-filter' routine@(PRoutine (PExpression fn):[]) (PList (val:rest)) =
-    case fn [] val of
-        PBool isValid ->
-            case filter' routine (PList rest) of
-                PList filtered -> PList (if isValid then (val : filtered) else filtered)
-
-        PError it -> PError it
-        it -> it
-
-filter' _ (PList []) = PList []
-
-filter' args val = argError "filter" "any -> Boolean, List" args val
+addArgs args scope = putInScope (PString "args") (PList args) scope
 
 join args@(PString glue:[]) (PList ((PString a):(PString b):xs)) =
     join args (PList ((PString (a ++ glue ++ b)) : xs))
 join _ (PList [it]) = it
 join args val = argError "join" "List, String" args val
 
-adjust (PNum i:PRoutine (PExpression fn):[]) (PList it) =
-    PList (take i it ++ (fn [] (it !! i)) : drop (i + 1) it)
 
 str [] val = PString (show val)
 
-apply (PRoutine (PExpression fn):(PList args):[]) value =
-    fn args value
-apply args value = argError "apply" "Any -> Any, List, Any" args value
-
-flatten' :: Expression
 flatten' [] (PList ((PList a):(PList b):xs)) =
     flatten' [] $ PList $ (a ++ b) ++ xs
+flatten' [] (PList [it]) = it
+flatten' [] it@(PList _) = it
+flatten' args value = argError "flatten" "[[Any]]" args value
 
-flatten' [] it@(PList []) = it
-
-fn names (PScope scope) =
-    case last names of
-        (PRoutine (PExpression fn)) ->
-            PRoutine $ PExpression (\args _ ->
-                PAssignScope scope
-            )
+-- fn names (PScope scope) =
+--     case last names of
+--         (PRoutine (PExpression fn)) ->
+--             PRoutine $ PExpression (\args _ ->
+--                 PAssignScope scope
+--             )
 
 not' [] (PBool a) = PBool $ not a
 
@@ -124,62 +76,171 @@ getElement [PNum i] (PList it) = it !! i
 list args _ = PList args
 
 take' (PNum i:[]) (PList it) = PList $ take i it
+take' args value = argError "take" "[Any], Num" args value
+
+drop' (PNum i:[]) (PList it) = PList $ drop i it
 last' [] (PList it) = last it
 
-scope' [] val = PRoutine $ PGetScope
-    (\scope -> PAssignScope $ putInScope (PString "it") val scope)
+-- scope' [] val = PRoutine $ PGetScope
+--     (\scope -> PAssignScope $ putInScope (PString "it") val scope)
 
 zip' [(PList b)] (PList a) = PList $ map (\(a, b) -> PList [a, b]) $ zip a b
 zip' args val = argError "zip" "list, list" args val
 
 quoteNames = map $ \(name, value) -> (PString name, value)
 
+split (PString "":[]) (PString s) =
+    PList $ map PString $ drop 1 $ splitOn "" s
+
+split (PString separator:[]) (PString s) =
+    PList $ map PString $ splitOn separator s
+
+resolvingArgs adapt =
+    map (\(name, fn) -> (name, PFunction (
+        \scope value ->
+            case unmeta' value of
+                PError it -> PError it
+                _ -> case findFromScope (PString "args") scope of
+                    Just (PList args) -> adapt fn args scope value
+                    Nothing -> adapt fn [] scope value
+    )))
+
+len [] (PList it) = PNum $ length it
+len args value = argError "len" "[Any]" args value
+
+defaultExpressions :: Object
 defaultExpressions =
-    map (\(name, fn) -> (name, PRoutine $ PExpression fn)) $
-    quoteNames [
+    resolvingArgs (\fn args _ value -> fn (map unmeta' args) (unmeta' value))
+    $ quoteNames [
         ("+", plus),
         ("*", multiply),
         ("<", lt),
         (">", gt),
-        ("adjust", adjust),
-        ("apply", apply),
         ("zip", zip'),
+        ("split", split),
         (".", getElement),
         ("prepend", prepend),
         ("head", head'),
         ("tail", tail'),
         ("take", take'),
+        ("drop", drop'),
         ("last", last'),
+
+        ("len", len),
         ("comment", identity),
-        ("foldl", foldl'),
         ("join", join),
         ("str", str),
-        (">>", \args value -> pipe ((PNum 1) : args) value),
-        (">>>", \args value -> pipe ((PNum 2) : args) value),
-        (">n", pipe),
-        ("fn", fn),
         ("==", eq),
-        ("!==", \args value -> not' [] (eq args value)),
+        ("!=", \args value -> not' [] (eq args value)),
         ("!", not'),
-        ("scope", scope'),
         ("mod", mod'),
         ("range", range),
-        ("curry", curry'),
+
         ("-", minus),
-        ("to", to),
+        ("flatten", flatten'),
+        ("list", list)
+    ]
+
+apply ((PFunction fn):(PList args):[]) scope value =
+    fn (addArgs args scope) value
+
+apply args _ value = argError "apply" "Any -> Any, List, Any" args value
+
+adjust (PNum i:PFunction fn:[]) scope (PList it) =
+    PList (take i it ++ (fn (addArgs [] scope) (it !! i)) : drop (i + 1) it)
+
+curry' args scope (PFunction fn) =
+    PFunction (\newScope newValue -> fn (addArgs (args ++ (
+        case findFromScope (PString "args") newScope of
+            Just (PList it) -> it
+            _ -> []
+    )) scope) newValue)
+
+foldl' (startValue:PFunction fn:[]) scope (PList list) =
+    foldl (\memo next -> fn (addArgs [next] scope) memo) startValue list
+
+map' (PFunction fn:[]) scope (PList values) =
+        PList $ map (fn (addArgs [] scope)) values
+map' args _ val = argError "map" "[Any], Any -> Any" args val
+
+filter' routine@(PFunction fn:[]) scope (PList (val:rest)) =
+    case fn scope val of
+        PBool isValid ->
+            case filter' routine scope (PList rest) of
+                PList filtered -> PList (if isValid then (val : filtered) else filtered)
+
+        PError it -> PError it
+        it -> it
+
+filter' _ _ (PList []) = PList []
+
+filter' args _ val = argError "filter" "any -> Boolean, List" args val
+
+
+scopeExpressions =
+    resolvingArgs (\fn args scope value -> fn (map unmeta' args) scope (unmeta' value))
+    $ quoteNames [
+        (">>", \args scope value -> pipe ((PNum 1) : args) scope value),
+        (">>>", \args scope value -> pipe ((PNum 2) : args) scope value),
+        (">n", pipe),
+        ("adjust", adjust),
+        ("apply", apply),
+        ("foldl", foldl'),
+        ("map", map'),
+        ("filter", filter'),
+        ("apply", apply),
+        ("curry", curry')
+    ]
+
+meta :: [PValue] -> Scope -> PValue -> PValue
+meta (name:metaValue:[]) _ value = PMeta name metaValue value
+meta (name:[]) scope (PMeta metaName value child) =
+    if metaName == name then value else meta [name] scope child
+meta (name:[]) _ value = PError $ "Metadata " ++ (show name) ++ " not found from " ++ (show value)
+
+unmeta [] _ it = unmeta' it
+unmeta' (PMeta _ _ it) = unmeta' it
+unmeta' any = any
+
+doc (doc:[]) = meta [PString "doc", doc]
+doc [] = meta [PString "doc"]
+
+put' (name:value:xs) = (name, value) : (put' xs)
+put' [] = []
+
+put args scope _ =
+    if (mod (length args) 2) > 0 then
+        PError $ "= expects even number of arguments, received " ++ (show args)
+    else PAssignScope $ Scope (put' args) scope
+
+to [value] _ _ = value
+to args _ val = argError "to" "Any, Any" args val
+
+and' [_] _ (PBool False) = (PBool False)
+and' [expression] _ (PBool True) = expression
+and' _ _ it = it
+
+or' [expression] _ (PBool False) = expression
+or' _ _ value = value
+
+
+metaExpressions =
+    resolvingArgs (\fn args scope value -> fn args scope value)
+    $ quoteNames [
+        ("meta", meta),
+        ("=", put),
+        ("unmeta", unmeta),
+        ("doc", doc),
         ("and", and'),
         ("or", or'),
-        ("=", put),
-        ("list", list),
-        ("map", map'),
-        ("filter", filter')
+        ("to", to)
     ]
 
 defaultValues :: Object
 defaultValues = quoteNames [("True", PBool True), ("False", PBool False)]
 
 defaultLib :: Object
-defaultLib = concat [defaultExpressions, defaultValues]
+defaultLib = concat [defaultExpressions, scopeExpressions, defaultValues, metaExpressions]
 
 defaultScope :: Scope
 defaultScope = Scope defaultLib NoScope

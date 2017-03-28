@@ -21,7 +21,7 @@ put '.qsort =
 
 
 from to 0 range 10 .qsort .value send (to sys : 'stdout : 'write)
-
+comment (
 from to file : 'read-all apply 'test-data.csv
     split '\n
     .tail
@@ -40,7 +40,7 @@ from to file : 'read-all apply 'test-data.csv
     send (to sys : 'stdout)
 
 
-put 'map = (fn '.map-fn)
+),put 'map = (fn '.map-fn)
     match . to .
           .head .map-fn prepend (.it map .map-fn)
 

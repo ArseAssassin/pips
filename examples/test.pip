@@ -1,1 +1,2 @@
-to 1
+= 'inc '(+ 1),
+>> to 0 range 10 map inc filter '(> 4)

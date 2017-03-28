@@ -1,51 +1,50 @@
+{-# LANGUAGE FlexibleInstances #-}
 module Runtime where
 
 import Data.List (find)
 
-type PArgs = [PValue]
-type Expression = (PArgs -> PValue -> PValue)
+data Scope = NoScope | Scope Object Scope | CompositeScope Scope Scope deriving (Eq, Show)
+type Object = [(PValue, PValue)]
+type Function = Scope -> PValue -> PValue
 
-data PExpression =
-    PExpression Expression |
-    PFunction (Scope -> PValue -> PValue) |
-    PGetScope (Scope -> PValue)
+instance Eq Function where
+    a == b = False
 
-instance Eq PExpression where
-    _ == _ = False
-
-instance Show PExpression where
-    show (PExpression _) = "PExpression"
-    show (PFunction _) = "PFunction"
-    show (PGetScope _) = "PGetScope"
+instance Show Function where
+    show it = "Function"
 
 data PValue =
     PNum Int |
     PString String |
     PError String |
-    PObject Object |
-    PRoutine PExpression |
-    PLookup PValue |
-    PAssignScope Scope |
     PScope Scope |
+    PAssignScope Scope |
+    PMeta PValue PValue PValue |
+    PFunction Function |
     PList [PValue] |
-    PBool Bool deriving (Show, Eq)
+    PBool Bool deriving (Eq, Show)
 
-type Object = [(PValue, PValue)]
-
-data Scope = NoScope | Scope Object Scope deriving (Show, Eq)
-
-findValue :: PValue -> Object -> PValue
-findValue name object =
-    case find ((name == ) . fst) object of
-        Nothing -> PError ("Couldn't find key ")
-        Just (_, x) -> x
-
-findFromScope name NoScope = PError $ "Tried looking up non-existent value from scope " ++ (show name)
-findFromScope name (Scope content parent) =
-    case findValue name content of
-        PError _ -> findFromScope name parent
-        x -> x
 
 putInScope :: PValue -> PValue -> Scope -> Scope
 putInScope name value parent =
     Scope [(name, value)] parent
+
+findValue :: PValue -> Object -> Maybe PValue
+findValue name object =
+    case find ((name == ) . fst) object of
+        Nothing -> Nothing
+        Just (_, x) -> Just x
+
+findFromScope name NoScope = Nothing
+findFromScope name (Scope content parent) =
+    case findValue name content of
+        Nothing -> findFromScope name parent
+        it -> it
+
+
+findFromScope name (CompositeScope a b) =
+    case findFromScope name a of
+        Nothing -> findFromScope name b
+        it -> it
+
+mergeScopes a b = CompositeScope a b

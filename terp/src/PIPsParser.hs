@@ -61,7 +61,7 @@ expressionLiteral = do
     content <- expression
     char ')'
     spaces
-    return $ ExpressionLiteral content
+    return content
 
 valueExpression :: GenParser Char st ASTNode
 valueExpression = do
@@ -69,7 +69,7 @@ valueExpression = do
     content <- expression
     char ')'
     spaces
-    return content
+    return $ ExpressionLiteral content
 
 subexpression = (try expressionLiteral) <|> (try valueExpression)
 

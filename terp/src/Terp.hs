@@ -5,46 +5,36 @@ import Runtime
 import StdLib
 
 runScript :: ASTNode -> PValue
-runScript node =
-    eval node defaultScope (PScope defaultScope)
+runScript it = eval it defaultScope (PScope defaultScope)
 
-processValue ((PAssignScope newScope), _) = (PScope newScope, newScope)
-processValue ((PRoutine (PGetScope fn)), scope) = processValue ((fn scope), scope)
-processValue ((PList (PRoutine (PGetScope fn):xs)), scope) =
-    (complete, scope)
-    where
-        rest = processValue ((PList xs), scope)
-        complete =
-            PList $ (fn scope) : case rest of
-                (PList it, _) -> it
+eval :: ASTNode -> Function
+eval (Expression nodes) scope value =
+    snd $ foldl (\(scope, value) astNode ->
+        case eval astNode scope value of
+            PAssignScope scope -> (scope, value)
+            it -> (scope, it)
+        ) (scope, value) nodes
 
-processValue it = it
-
-eval :: ASTNode -> Scope -> PValue -> PValue
 eval (Term (fn:args)) scope value =
-    case eval fn newScope value of
-        PRoutine (PExpression fn') ->
-            fn' evaledArgs value
-        PRoutine (PFunction fn') ->
-            fn' newScope value
-        PRoutine (PGetScope fn') ->
-            fn' newScope
+    case eval fn updatedScope value of
+        PFunction fn -> fn updatedScope value
         PError it -> PError it
-        it -> PError ("Calling invalid function" ++ (show it))
+        it -> PError $ "Calling invalid function " ++ (show it)
     where
-        evaledArgs = map (\astNode -> eval astNode scope value) args
-        newScope = (putInScope (PString "args") (PList evaledArgs) scope)
+        evaledArgs = map (\it -> eval it scope value) args
+        updatedScope = putInScope (PString "it") value $ putInScope (PString "args") (PList evaledArgs) scope
 
-eval (ExpressionLiteral expression) scope _ =
-    PRoutine $ PFunction (
+eval (ExpressionLiteral astNodes) scope _ =
+    PFunction (
         \newScope value ->
-            eval expression newScope value
+            eval astNodes (mergeScopes newScope scope) value
     )
 
-eval (Expression nodes) scope value =
-    fst $ foldl (\(val, scope) ast -> processValue (eval ast scope val, scope)) (value, scope) nodes
+eval (Lookup name) scope value =
+    case findFromScope (PString name) scope of
+        Just it -> it
+        Nothing -> PError $ "Couldn't find value " ++ (show name) ++ " from scope"
 
-eval (Lookup name) scope _ = findFromScope (PString name) scope
-eval (NumLiteral num) _ _ = PNum num
+eval (NumLiteral i) _ _ = PNum i
 eval (StringLiteral s) _ _ = PString s
 
