@@ -246,6 +246,8 @@ catch scope it@(PError typeName _) =
     case findFromScope (PString "args") scope of
         Just (PList (name:value:[])) ->
             if typeName == name then value else it
+        Just (PList args) ->
+            argError "catch" "Any, String, Any" args it
 
 catch _ any = any
 

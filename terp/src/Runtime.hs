@@ -27,11 +27,11 @@ data PValue =
 instance Show PValue where
     show (PNum it) = (show it)
     show (PString it) = show it
-    show (PError value it) = "PError " ++ (show value) ++ " " ++ it
-    show (PScope _) = "PScope"
-    show (PAssignScope _) = "PAssignScope"
+    show (PError value it) = "Error " ++ (show value) ++ " " ++ it
+    show (PScope _) = "Scope"
+    show (PAssignScope _) = "AssignScope"
     show (PMeta _ _ value) = show value
-    show (PFunction _) = "PFunction"
+    show (PFunction _) = "Function"
     show (PList values) = "(list " ++ (unwords $ map show values) ++ ")"
     show (PBool it) = (show it)
 

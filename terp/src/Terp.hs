@@ -20,10 +20,12 @@ eval (Expression nodes sourcePos) scope value =
         it -> it
 
     where
-        output = snd $ foldl (\(scope, value) astNode ->
-            case eval astNode scope value of
-                value@(PAssignScope scope) -> (scope, value)
-                it -> (scope, it)
+        output = snd $ foldl (
+            \(scope, value) astNode ->
+                let updatedScope = case value of
+                                        PAssignScope it -> it
+                                        _ -> scope
+                in (updatedScope, eval astNode updatedScope value)
             ) (scope, value) nodes
 
 eval (Term (fn:args)) scope value =
@@ -41,7 +43,7 @@ eval (Term (fn:args)) scope value =
         it -> PError (PString "ValueError") $ "Calling invalid function " ++ (show it)
     where
         evaledArgs = map (\it -> eval it scope value) args
-        updatedScope = putInScope (PString "it") value $ putInScope (PString "args") (PList evaledArgs) scope
+        updatedScope = putInScope (PString "input") value $ putInScope (PString "args") (PList evaledArgs) scope
         evaledFn = eval fn updatedScope value
 
 eval (ExpressionLiteral astNodes) scope _ =
