@@ -29,6 +29,7 @@ executable pips-exe
   build-depends:       base
                      , pips
                      , parsec
+                     , transformers
   default-language:    Haskell2010
 
 

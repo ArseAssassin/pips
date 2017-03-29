@@ -1,1 +1,2 @@
-= 'setFoo '(= 'foo (to args)), setFoo 1 2 3, to foo
+require '../examples/helloWorld.pip,
+to foo

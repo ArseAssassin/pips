@@ -14,7 +14,8 @@ main = do
     case ast of
         Left e -> do putStrLn "Error parsing input:"
                      print e
-        Right it -> putStrLn
-            (case runScript it defaultScope of
+        Right it -> do
+            result <- runScript it defaultScope
+            putStrLn (case result of
                 PError typeName it -> (show typeName) ++ ": \n" ++ it
                 it -> show it)

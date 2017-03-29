@@ -5,13 +5,10 @@ import Data.List (find)
 
 data Scope = NoScope | Scope Object Scope | CompositeScope Scope Scope deriving (Eq, Show)
 type Object = [(PValue, PValue)]
-type Function = Scope -> PValue -> PValue
+type Function = Scope -> PValue -> IO PValue
 
 instance Eq Function where
     a == b = False
-
-instance Show Function where
-    show it = "Function"
 
 data PValue =
     PNum Int |
@@ -30,7 +27,8 @@ instance Show PValue where
     show (PError value it) = "Error " ++ (show value) ++ " " ++ it
     show (PScope _) = "Scope"
     show (PAssignScope _) = "AssignScope"
-    show (PMeta _ _ value) = show value
+    show (PMeta _ _ value@(PMeta _ _ _)) = show value
+    show (PMeta _ _ value) = "(meta " ++ show value ++ ")"
     show (PFunction _) = "Function"
     show (PList values) = "(list " ++ (unwords $ map show values) ++ ")"
     show (PBool it) = (show it)

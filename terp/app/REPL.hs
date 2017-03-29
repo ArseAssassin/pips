@@ -2,6 +2,7 @@ module REPL where
 
 import System.Console.Haskeline
 import Data.Char (isSpace)
+import Control.Monad.IO.Class (liftIO)
 
 import Lib (parsePIPs, runScript, PValue(PError, PAssignScope), defaultScope)
 
@@ -30,8 +31,9 @@ main = runInputT defaultSettings $ loop defaultScope
                     outputStrLn (show e)
                     loop scope
 
-                Right it ->
-                    case runScript it scope of
+                Right it -> do
+                    result <- liftIO (runScript it scope)
+                    case result of
                         PError typeName it -> do
                             outputStrLn $ (show $ typeName) ++ ": \n" ++ it
                             outputStrLn ""
