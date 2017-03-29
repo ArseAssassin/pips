@@ -46,13 +46,14 @@ scopeLookup = do
     return $ Lookup content
 
 value :: GenParser Char st ASTNode
-value = subexpression <|> stringLiteral <|> number <|> scopeLookup
+value = subexpression <|> stringLiteral <|> (try number) <|> scopeLookup
 
 term :: GenParser Char st ASTNode
 term = do
     spaces
+    pos <- sourcePos
     content <- sepBy1 value spaces
-    return $ Term content
+    return $ Term content pos
 
 expression :: GenParser Char st ASTNode
 expression = do

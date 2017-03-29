@@ -1,0 +1,3 @@
+= 'fn '(= 'names (to args, take (len, - 1))
+          'body  (to args, last),
+       '(apply = (to names, zip args, flatten), body))

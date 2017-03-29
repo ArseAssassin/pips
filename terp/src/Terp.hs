@@ -1,6 +1,6 @@
 module Terp (runScript) where
 
-import Text.ParserCombinators.Parsec.Pos (sourceName, sourceLine, sourceColumn)
+import Text.ParserCombinators.Parsec.Pos (sourceName, sourceLine, sourceColumn, SourcePos)
 import AST
 import Runtime
 import StdLib
@@ -24,6 +24,15 @@ require' = PFunction (
                     Right ast -> runScript ast defaultScope
             _ -> return $ PError (PString "RequireError") "Error while requiring file"
     )
+
+addSourcePos :: PValue -> SourcePos -> PValue
+addSourcePos (PError typeName it) sourcePos =
+    PError typeName $
+        it ++
+        "\n  in " ++
+        (sourceName sourcePos) ++
+        ":" ++ (show (sourceLine sourcePos)) ++
+        ":" ++ (show (sourceColumn sourcePos))
 
 execExpression :: IO (Scope, IO PValue) -> ASTNode -> IO (Scope, IO PValue)
 execExpression input astNode = do
@@ -52,25 +61,24 @@ eval (Expression nodes sourcePos) scope value = do
     value <- snd output
 
     return $ case value of
-        PError typeName it -> PError typeName $
-                it ++
-                "\n  in " ++
-                (sourceName sourcePos) ++
-                ":" ++ (show (sourceLine sourcePos)) ++
-                ":" ++ (show (sourceColumn sourcePos))
+        it@(PError _ _) -> addSourcePos it sourcePos
         it -> it
 
 
-eval (Term (fn:args)) scope value = do
+eval (Term (fn:args) sourcePos) scope value = do
     evaledArgs <- sequence $ map (\it -> eval it scope value) args
     let updatedScope = putInScope (PString "input") value $ putInScope (PString "args") (PList evaledArgs) scope
     evaledFn <- eval fn updatedScope value
 
     case unmeta evaledFn of
         fn@(PFunction _) -> callFunction updatedScope value fn
-        PError typeName it -> return $ PError typeName it
-            -- case meta [PString "name"] updatedScope evaledFn of
-        it -> return $ PError (PString "ValueError") $ "Calling invalid function " ++ (show it)
+        PError typeName it ->
+            return $ addSourcePos (
+                case meta [PString "name"] updatedScope evaledFn of
+                    PError (PString "LookupError") _ -> PError typeName it
+                    name -> PError typeName $ "While calling function " ++ (show name) ++ ": " ++ it
+            ) sourcePos
+        it -> return $ addSourcePos (PError (PString "ValueError") $ "Calling invalid function " ++ (show it)) sourcePos
 
 eval (ExpressionLiteral astNodes) scope _ =
     return $ PFunction (
