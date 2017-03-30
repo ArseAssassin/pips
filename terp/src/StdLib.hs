@@ -90,13 +90,11 @@ split (PString separator:[]) (PString s) =
 putName name value = PMeta (PString "name") name value
 
 resolvingArgs adapt =
-    map (\(name, fn) -> (name, putName name $ PFunction (
-        \scope value ->
+    map (\(name, fn) -> (name, putName name $ PFunction (
+        \scope args value ->
             return $ case unmeta value of
                 PError errorType it -> PError errorType it
-                _ -> case findFromScope (PString "args") scope of
-                    Just (PList args) -> adapt fn args scope value
-                    Nothing -> adapt fn [] scope value
+                _ -> adapt fn args scope value
     )))
 
 len [] (PList it) = PNum $ length it
@@ -133,10 +131,10 @@ defaultExpressions =
         ("list", list)
     ]
 
--- apply ((PFunction fn):(PList args):[]) scope value =
---     fn (addArgs args scope) value
+apply scope ((PFunction fn):(PList args):[]) value =
+    fn scope args value
 
--- apply args _ value = argError "apply" "Any -> Any, List, Any" args value
+apply _ args value = return $ argError "apply" "Any -> Any, List, Any" args value
 
 -- adjust (PNum i:PFunction fn:[]) scope (PList it) =
 --     PList (take i it ++ (fn (addArgs [] scope) (it !! i)) : drop (i + 1) it)
@@ -178,19 +176,20 @@ defaultExpressions =
 -- pipe args _ val = argError "pipe" "Any, [Fn, Any]" args val
 
 
--- scopeExpressions =
---     resolvingArgs (\fn args scope value -> fn (map unmeta args) scope (unmeta value))
---     $ quoteNames [
+scopeExpressions =
+    map (\(name, fn) -> (name, putName name $ PFunction (\scope args value ->
+        fn scope (map unmeta args) value)))
+    $ quoteNames [
 --         (">>", \args scope value -> pipe ((PNum 1) : args) scope value),
 --         (">>>", \args scope value -> pipe ((PNum 2) : args) scope value),
 --         (">n", pipe),
 --         ("adjust", adjust),
 --         ("foldl", foldl'),
 --         ("map", map'),
---         ("filter", filter'),
---         -- ("apply", apply),
+        -- ("filter", filter'),
+        ("apply", apply)
 --         ("curry", curry')
---     ]
+    ]
 
 meta :: [PValue] -> Scope -> PValue -> PValue
 meta (name:metaValue:[]) _ value = PMeta name metaValue value
@@ -214,7 +213,7 @@ put' [] = []
 put args scope _ =
     if (mod (length args) 2) > 0 then
         PError (PString "ArgumentError") $ "= expects even number of arguments, received " ++ (show args)
-    else PAssignScope $ Scope (put' args) scope
+    else PAssignScope $ put' args
 
 to [value] _ _ = value
 to args _ val = argError "to" "Any, Any" args val
@@ -242,14 +241,11 @@ metaExpressions =
 
 
 
-catch scope it@(PError typeName _) =
-    return $ case findFromScope (PString "args") scope of
-        Just (PList (name:value:[])) ->
-            if typeName == name then value else it
-        Just (PList args) ->
-            argError "catch" "Any, String, Any" args it
+catch :: Scope -> [PValue] -> PValue -> IO PValue
+catch _ (name:value:[]) it@(PError typeName _) =
+    return $ if typeName == name then value else it
 
-catch _ any = return $ any
+catch _ _ any = return $ any
 
 bareExpressions =
     quoteNames [
@@ -261,7 +257,7 @@ defaultValues :: Object
 defaultValues = quoteNames [("True", PBool True), ("False", PBool False)]
 
 defaultLib :: Object
-defaultLib = concat [defaultExpressions, defaultValues, metaExpressions, bareExpressions]
+defaultLib = concat [defaultExpressions, defaultValues, metaExpressions, bareExpressions, scopeExpressions]
 
 defaultScope :: Scope
-defaultScope = Scope defaultLib NoScope
+defaultScope = defaultLib

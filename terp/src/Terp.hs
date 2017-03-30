@@ -12,17 +12,14 @@ runScript it scope = do
     where updatedScope = putInScope (PString "require") require' scope
 
 require' = PFunction (
-    \scope value ->
-        case findFromScope (PString "args") scope of
-            Just (PList [PString fileName]) -> do
-                s <- readFile fileName
-                let parserOutput = parsePIPs fileName s
+    \scope [(PString fileName)] value -> do
+        s <- readFile fileName
+        let parserOutput = parsePIPs fileName s
 
-                case parserOutput of
-                    Left parserError ->
-                        return $ PError (PString "RequireError") ("Error while requiring file: " ++ (show parserError))
-                    Right ast -> runScript ast defaultScope
-            _ -> return $ PError (PString "RequireError") "Error while requiring file"
+        case parserOutput of
+            Left parserError ->
+                return $ PError (PString "RequireError") ("Error while requiring file: " ++ (show parserError))
+            Right ast -> runScript ast defaultScope
     )
 
 addSourcePos :: PValue -> SourcePos -> PValue
@@ -39,15 +36,15 @@ execExpression input astNode = do
     (scope, value) <- input
     value' <- value
     let updatedScope = case value' of
-                            PAssignScope it -> it
+                            PAssignScope it -> mergeScopes it scope
                             _ -> scope
 
 
     return (updatedScope, eval astNode updatedScope value')
 
-callFunction :: Scope -> PValue -> PValue -> IO PValue
-callFunction scope input evaledFn@(PFunction fn) = do
-    newVal <- fn scope input
+callFunction :: Scope -> [PValue] -> PValue -> PValue -> IO PValue
+callFunction scope args input evaledFn@(PFunction fn) = do
+    newVal <- fn scope args input
     return $ case newVal of
         PError typeName it ->
             case meta [PString "name"] scope evaledFn of
@@ -55,7 +52,7 @@ callFunction scope input evaledFn@(PFunction fn) = do
                 name -> PError typeName $ "Error calling function named " ++ (show name) ++ ": \n" ++ it
         it -> it
 
-eval :: ASTNode -> Function
+eval :: ASTNode -> Scope -> PValue -> IO PValue
 eval (Expression nodes sourcePos) scope value = do
     output <- foldl execExpression (return (scope, return value)) nodes
     value <- snd output
@@ -67,14 +64,13 @@ eval (Expression nodes sourcePos) scope value = do
 
 eval (Term (fn:args) sourcePos) scope value = do
     evaledArgs <- sequence $ map (\it -> eval it scope value) args
-    let updatedScope = putInScope (PString "input") value $ putInScope (PString "args") (PList evaledArgs) scope
-    evaledFn <- eval fn updatedScope value
+    evaledFn <- eval fn scope value
 
     case unmeta evaledFn of
-        fn@(PFunction _) -> callFunction updatedScope value fn
+        fn@(PFunction _) -> callFunction scope evaledArgs value fn
         PError typeName it ->
             return $ addSourcePos (
-                case meta [PString "name"] updatedScope evaledFn of
+                case meta [PString "name"] scope evaledFn of
                     PError (PString "LookupError") _ -> PError typeName it
                     name -> PError typeName $ "While calling function " ++ (show name) ++ ": " ++ it
             ) sourcePos
@@ -82,8 +78,9 @@ eval (Term (fn:args) sourcePos) scope value = do
 
 eval (ExpressionLiteral astNodes) scope _ =
     return $ PFunction (
-        \newScope value ->
-            eval astNodes (mergeScopes newScope scope) value
+        \_ args value -> do
+            let updatedScope = putInScope (PString "args") (PList args) scope
+            eval astNodes updatedScope value
     )
 
 eval (Lookup name) scope _ =
