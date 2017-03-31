@@ -39,8 +39,8 @@ main = runInputT defaultSettings $ loop defaultScope
                             outputStrLn ""
                             loop scope
 
-                        PAssignScope scope -> do
-                            loop scope
+                        PAssignScope newScope -> do
+                            loop $ newScope ++ scope
 
                         it -> do
                             outputStrLn $ show $ it

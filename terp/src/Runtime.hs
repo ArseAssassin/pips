@@ -15,21 +15,31 @@ data PValue =
     PString String |
     PError PValue String |
     PScope Scope |
+    PHashMap Object |
     PAssignScope Scope |
     PMeta PValue PValue PValue |
     PFunction Function |
     PList [PValue] |
     PBool Bool deriving (Eq)
 
+showScope scope =
+    show (filter (\(_, val) ->
+                    case val of
+                        PScope it -> it /= scope
+                        _ -> True
+         ) scope)
+
 instance Show PValue where
     show (PNum it) = (show it)
     show (PString it) = show it
     show (PError value it) = "Error " ++ (show value) ++ " " ++ it
-    show (PScope it) = show it
-    show (PAssignScope it) = "AssignScope " ++ (show it)
+    show scope@(PScope it) = "Scope " ++ (showScope it)
+    show (PAssignScope it) = "AssignScope " ++ (showScope it)
     show (PMeta _ _ value@(PMeta _ _ _)) = show value
     show (PMeta _ _ value) = "(meta " ++ show value ++ ")"
+    show (PHashMap it) = "HashMap " ++ (showScope it)
     show (PFunction _) = "Function"
+    show (PList []) = "(list)"
     show (PList values) = "(list " ++ (unwords $ map show values) ++ ")"
     show (PBool it) = (show it)
 

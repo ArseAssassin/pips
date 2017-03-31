@@ -1,3 +1,31 @@
-= 'fn '(= 'names (to args, take (len, - 1))
-          'body  (to args, last),
-       to '(apply = (to names, zip args, flatten), body))
+= 'list '(to args),
+= 'bindArgs (to '(to newScope, apply put (to args, zip parentArgs, flatten)),
+             meta 'accessParentScope (hashmap 'parentArgs 'args)),
+
+= 'drop '(
+    bindArgs 'i,
+    to input, == (list), or (to i, == 0), and input,
+    or (to input, tail, recur (to i, - 1))),
+
+= 'take '(bindArgs 'i,
+    to input, == (list),
+    or (to i, == 0), and (list),
+    or (to input, list (head) (tail, recur (to i, - 1)), flatten)),
+
+= '>> '(
+    to args,
+    len, < 2, and (error 'ArgumentError ">> expects even number of arguments"),
+    or (
+        = 'fn (head)
+          'arg (drop 1, head)
+          'rest (drop 2),
+
+        to input, apply fn (list arg), apply >> rest)
+),
+
+= 'plus '(bindArgs 'i, import,
+    to i, == 0, and input,
+    or (to input, + 1, plus (to i, - 1))
+),
+
+to 1, (plus 2)

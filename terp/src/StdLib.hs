@@ -35,6 +35,8 @@ str [] val = PString (show val)
 
 flatten' [] (PList ((PList a):(PList b):xs)) =
     flatten' [] $ PList $ (a ++ b) ++ xs
+flatten' [] (PList (a:(PList b):xs)) =
+    flatten' [] $ PList $ (a : b) ++ xs
 flatten' [] (PList [it]) = it
 flatten' [] it@(PList _) = it
 flatten' args value = argError "flatten" "[[Any]]" args value
@@ -65,12 +67,6 @@ prepend (value:[]) (PList a) = PList $ value : a
 
 getElement [PNum i] (PList it) = it !! i
 
-list args _ = PList args
-
-take' (PNum i:[]) (PList it) = PList $ take i it
-take' args value = argError "take" "[Any], Num" args value
-
-drop' (PNum i:[]) (PList it) = PList $ drop i it
 last' [] (PList it) = last it
 
 -- scope' [] val = PRoutine $ PGetScope
@@ -93,7 +89,7 @@ resolvingArgs adapt =
     map (\(name, fn) -> (name, putName name $ PFunction (
         \scope args value ->
             return $ case unmeta value of
-                PError errorType it -> PError errorType it
+                -- PError errorType it -> PError errorType it
                 _ -> adapt fn args scope value
     )))
 
@@ -114,8 +110,6 @@ defaultExpressions =
         ("prepend", prepend),
         ("head", head'),
         ("tail", tail'),
-        ("take", take'),
-        ("drop", drop'),
         ("last", last'),
         ("len", len),
         ("comment", identity),
@@ -127,14 +121,13 @@ defaultExpressions =
         ("mod", mod'),
         ("range", range),
         ("-", minus),
-        ("flatten", flatten'),
-        ("list", list)
+        ("flatten", flatten')
     ]
 
 apply scope ((PFunction fn):(PList args):[]) value =
     fn scope args value
 
-apply _ args value = return $ argError "apply" "Any -> Any, List, Any" args value
+apply _ args value = return $ argError "apply" "Any, Any -> Any, List" args value
 
 -- adjust (PNum i:PFunction fn:[]) scope (PList it) =
 --     PList (take i it ++ (fn (addArgs [] scope) (it !! i)) : drop (i + 1) it)
@@ -196,6 +189,10 @@ meta (name:metaValue:[]) _ value = PMeta name metaValue value
 meta (name:[]) scope (PMeta metaName value child) =
     if metaName == name then value else meta [name] scope child
 meta (name:[]) _ value = PError (PString "LookupError") $ "Metadata " ++ (show name) ++ " not found from " ++ (show value)
+meta [] _ value =
+    PHashMap $ reverse $ meta' value
+    where meta' (PMeta metaName metaValue value) = (metaName, metaValue) : meta' value
+          meta' value = []
 
 unmeta (PMeta _ _ it) = unmeta it
 unmeta any = any
@@ -210,10 +207,21 @@ doc [] scope value =
 put' (name:value:xs) = (name, PMeta (PString "name") name value) : (put' xs)
 put' [] = []
 
-put args scope _ =
+put args _ (PScope scope) =
     if (mod (length args) 2) > 0 then
         PError (PString "ArgumentError") $ "= expects even number of arguments, received " ++ (show args)
-    else PAssignScope $ put' args
+    else PScope $ (put' args) ++ scope
+
+put args _ value = argError "put" "Scope, [[Any, Any]]" args value
+
+assign args scope _ =
+    if (mod (length args) 2) > 0 then
+        PError (PString "ArgumentError") $ "= expects even number of arguments, received " ++ (show args)
+    else PAssignScope $ (put' args) ++ scope
+
+hashMap' [] = []
+hashMap' (value:name:xs) = (value, name) : hashMap' xs
+hashMap args _ value = PHashMap $ hashMap' args
 
 to [value] _ _ = value
 to args _ val = argError "to" "Any, Any" args val
@@ -225,13 +233,18 @@ and' _ _ it = it
 or' [expression] _ (PBool False) = expression
 or' _ _ value = value
 
+import' _ oldScope (PScope scope) = PAssignScope (scope ++ oldScope)
+import' args _ value = argError "import" "Scope" args value
 
 metaExpressions =
     resolvingArgs (\fn args scope value -> fn args scope value)
     $ quoteNames [
         ("meta", meta),
-        ("=", put),
+        ("=", assign),
+        ("put", put),
+        ("import", import'),
         ("unmeta", unmeta'),
+        ("hashmap", hashMap),
         ("doc", doc),
         ("scope", \_ scope _ -> PScope scope),
         ("and", and'),
@@ -247,9 +260,19 @@ catch _ (name:value:[]) it@(PError typeName _) =
 
 catch _ _ any = return $ any
 
+log' _ [name] value = do
+    putStrLn $ "Log (" ++ (show name) ++ "): " ++ (show value)
+    return value
+
+log' _ [] value = do
+    putStrLn $ "Log: " ++ (show value)
+    return value
+
 bareExpressions =
     quoteNames [
-        ("catch", PFunction catch)
+        ("catch", PFunction catch),
+        ("log", PFunction log'),
+        ("newScope", PScope [])
     ]
 
 
