@@ -1,1 +1,54 @@
-require '../examples/stdLib.pip
+= 'list '(to args),
+= 'args= (to '(apply = (to args, zip parentArgs, flatten)),
+             meta 'accessParentScope (hashmap 'parentArgs 'args)),
+
+= 'drop '(
+    args= 'i,
+    to input, == (list), or (to i, == 0), and input,
+    or (to input, tail, recur (to i, - 1))),
+
+= 'take '(args= 'i,
+    to input, == (list),
+    or (to i, == 0), and (list),
+    or (to input, list (head) (tail, recur (to i, - 1)), flatten)),
+
+= '>> '(
+    to args,
+    len, == 0, and input,
+    or (
+        to args,
+        = 'fn (head)
+          'arg (drop 1, head)
+          'rest (drop 2),
+
+        to input, apply fn (list arg), apply recur rest)
+),
+
+= 'plus '(args= 'i,
+    to i, == 0, and input,
+    or (to input, + 1, recur (to i, - 1))
+),
+
+= 'list= '(
+    = 'iter '(
+        to args, len, == 0, and (error 'PatternError "No args passed to list="),
+        to args, len, == 1,
+            and (list (to args, head) input),
+            or (
+                list (to args, head) (to input, head),
+                concat (to input, tail, apply recur (to args, tail))
+            )
+    ),
+    apply = (to input, apply iter args)
+),
+
+= 'match '(
+    to args, list= 'pattern 'value 'rest,
+    to pattern, isError 'PatternError, not, and (to pattern, value)
+),
+
+comment (list 1,
+match
+    (list= 'x 'xs) '(scope)
+),
+= 'foo 1, '(scope)

@@ -9,20 +9,20 @@ import StdLib
 import PIPsParser
 
 runScript :: ASTNode -> Scope -> IO PValue
-runScript it scope = do
-    eval it updatedScope (PScope updatedScope)
-    where updatedScope = putInScope (PString "require") require' scope
+runScript it scope =
+    return $ eval it scope (PScope scope)
+    -- where updatedScope = putInScope (PString "require") require' scope
 
-require' = PFunction (
-    \scope [(PString fileName)] value -> do
-        s <- readFile fileName
-        let parserOutput = parsePIPs fileName s
+-- require' = PFunction (
+--     \scope [(PString fileName)] value -> do
+--         s <- readFile fileName
+--         let parserOutput = parsePIPs fileName s
 
-        case parserOutput of
-            Left parserError ->
-                return $ PError (PString "RequireError") ("Error while requiring file: " ++ (show parserError))
-            Right ast -> runScript ast defaultScope
-    )
+--         case parserOutput of
+--             Left parserError ->
+--                 return $ PError (PString "RequireError") ("Error while requiring file: " ++ (show parserError))
+--             Right ast -> runScript ast defaultScope
+--     )
 
 addSourcePos :: PValue -> SourcePos -> PValue
 addSourcePos (PError typeName it) sourcePos =
@@ -33,40 +33,17 @@ addSourcePos (PError typeName it) sourcePos =
         ":" ++ (show (sourceLine sourcePos)) ++
         ":" ++ (show (sourceColumn sourcePos))
 
-execExpression :: IO (Scope, IO PValue) -> ASTNode -> IO (Scope, IO PValue)
-execExpression input astNode = do
-    (scope, value) <- input
-    value' <- value
-    let (updatedScope, updatedValue) = case value' of
-                                            PAssignScope it -> (mergeScopes it scope, PScope it)
-                                            _ -> (scope, value')
+eval :: ASTNode -> Scope -> PValue -> PValue
+eval (Expression nodes sourcePos) scope value =
+    snd $ foldl (\(scope, val) astNode ->
+                    let (updatedScope, updatedValue) = case val of
+                                                            PAssignScope it -> (s, PScope s)
+                                                                where s = mergeScopes it scope
+                                                            _ -> (scope, val)
+                    in (updatedScope, eval astNode updatedScope updatedValue)
+                ) (scope, value) nodes
 
-    return (updatedScope, eval astNode updatedScope updatedValue)
-
-callFunction :: Scope -> [PValue] -> PValue -> PValue -> IO PValue
-callFunction scope args input evaledFn@(PFunction fn) = do
-    newVal <- fn scope args input
-    return $ case newVal of
-        PError typeName it ->
-            case meta [PString "name"] scope evaledFn of
-                PError _ _ -> PError typeName $ "Error calling anonymous function: \n" ++ it
-                name -> PError typeName $ "Error calling function named " ++ (show name) ++ ": \n" ++ it
-        it -> it
-
-
-eval :: ASTNode -> Scope -> PValue -> IO PValue
-eval (Expression nodes sourcePos) scope value = do
-    output <- foldl execExpression (return (scope, return value)) nodes
-    value <- snd output
-
-    return $ case value of
-        it@(PError _ _) -> addSourcePos it sourcePos
-        it -> it
-
-eval (Term (fn:args) sourcePos) scope value = do
-    evaledArgs <- sequence $ map (\it -> eval it scope value) args
-    evaledFn <- eval fn scope value
-
+eval (Term (fn:args) sourcePos) scope value =
     let updatedScope = case meta [(PString "accessParentScope")] scope evaledFn of
                             PHashMap vals -> map (\(name, parentName) ->
                                                 case findFromScope parentName scope of
@@ -75,37 +52,41 @@ eval (Term (fn:args) sourcePos) scope value = do
                                             ) vals
                             _ -> scope
                         & (putInScope (PString "__functionMeta") (meta [] scope evaledFn))
+        evaledArgs = map (\it -> eval it scope value) args
+        evaledFn = eval fn scope value
+        in case unmeta evaledFn of
+            PFunction fn ->
+                case fn updatedScope evaledArgs value of
+                    PError typeName it ->
+                        case meta [PString "name"] scope evaledFn of
+                            PError _ _ -> PError typeName $ "Error calling anonymous function: \n" ++ it
+                            name -> PError typeName $ "Error calling function named " ++ (show name) ++ ": \n" ++ it
+                    it -> it
+            PError typeName it ->
+                addSourcePos (
+                    case meta [PString "name"] updatedScope evaledFn of
+                        PError (PString "LookupError") _ -> PError typeName it
+                        name -> PError typeName $ "While calling function " ++ (show name) ++ ": " ++ it
+                ) sourcePos
+            it -> addSourcePos (PError (PString "ValueError") $ "Calling invalid function " ++ (show it)) sourcePos
 
-
-    case unmeta evaledFn of
-        fn@(PFunction _) -> callFunction updatedScope evaledArgs value fn
-        PError typeName it ->
-            return $ addSourcePos (
-                case meta [PString "name"] updatedScope evaledFn of
-                    PError (PString "LookupError") _ -> PError typeName it
-                    name -> PError typeName $ "While calling function " ++ (show name) ++ ": " ++ it
-            ) sourcePos
-        it -> return $ addSourcePos (PError (PString "ValueError") $ "Calling invalid function " ++ (show it)) sourcePos
-
-eval (ExpressionLiteral astNodes) scope _ =
-    return fn
+eval (ExpressionLiteral astNode) scope _ =
+    fn
     where fn = PFunction $
-                \newScope args value -> do
+                \newScope args value ->
                     let metaFn = case findFromScope (PString "__functionMeta") newScope of
                                     Just (PHashMap it) -> foldl (\value (name, val) -> PMeta name val value) fn it
                                     Nothing -> fn
-
-                    let updatedScope = [(PString "args", (PList args)),
+                        updatedScope = [(PString "args", (PList args)),
                                         (PString "input", value),
-                                        (PString "recur", metaFn)] ++ newScope ++ scope
-
-                    eval astNodes updatedScope value
+                                        (PString "recur", fn)] ++ newScope ++ scope
+                        in eval astNode updatedScope value
 
 eval (Lookup name) scope _ =
-    return $ case findFromScope (PString name) scope of
+    case findFromScope (PString name) scope of
         Just it -> it
         Nothing -> PError (PString "LookupError") $ "Couldn't find value " ++ (show name) ++ " from scope"
 
-eval (NumLiteral i) _ _ = return $ PNum i
-eval (StringLiteral s) _ _ = return $ PString s
+eval (NumLiteral i) _ _ = PNum i
+eval (StringLiteral s) _ _ = PString s
 

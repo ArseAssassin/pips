@@ -5,9 +5,13 @@ import Data.List (find)
 
 type Object = [(PValue, PValue)]
 type Scope = Object
-type Function = Scope -> [PValue] -> PValue -> IO PValue
+type Function = Scope -> [PValue] -> PValue -> PValue
+type Input = IO PValue
 
 instance Eq Function where
+    a == b = False
+
+instance Eq Input where
     a == b = False
 
 data PValue =
@@ -19,6 +23,7 @@ data PValue =
     PAssignScope Scope |
     PMeta PValue PValue PValue |
     PFunction Function |
+    PInput Input |
     PList [PValue] |
     PBool Bool deriving (Eq)
 

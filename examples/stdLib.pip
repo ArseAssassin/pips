@@ -25,7 +25,7 @@
 
 = 'plus '(bindArgs 'i, import,
     to i, == 0, and input,
-    or (to input, + 1, plus (to i, - 1))
+    or '(to input, + 1, plus (to i, - 1))
 ),
 
-to 1, (plus 2)
+to 1, plus 1

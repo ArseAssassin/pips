@@ -88,13 +88,15 @@ putName name value = PMeta (PString "name") name value
 resolvingArgs adapt =
     map (\(name, fn) -> (name, putName name $ PFunction (
         \scope args value ->
-            return $ case unmeta value of
-                -- PError errorType it -> PError errorType it
+            case unmeta value of
+                it@(PError _ _) -> it
                 _ -> adapt fn args scope value
     )))
 
 len [] (PList it) = PNum $ length it
 len args value = argError "len" "[Any]" args value
+
+concat' [(PList b)] (PList a) = PList $ a ++ b
 
 defaultExpressions :: Object
 defaultExpressions =
@@ -105,6 +107,7 @@ defaultExpressions =
         ("<", lt),
         (">", gt),
         ("zip", zip'),
+        ("concat", concat'),
         ("split", split),
         (".", getElement),
         ("prepend", prepend),
@@ -117,7 +120,7 @@ defaultExpressions =
         ("str", str),
         ("==", eq),
         ("!=", \args value -> not' [] (eq args value)),
-        ("!", not'),
+        ("not", not'),
         ("mod", mod'),
         ("range", range),
         ("-", minus),
@@ -127,7 +130,7 @@ defaultExpressions =
 apply scope ((PFunction fn):(PList args):[]) value =
     fn scope args value
 
-apply _ args value = return $ argError "apply" "Any, Any -> Any, List" args value
+apply _ args value = argError "apply" "Any, Any -> Any, List" args value
 
 -- adjust (PNum i:PFunction fn:[]) scope (PList it) =
 --     PList (take i it ++ (fn (addArgs [] scope) (it !! i)) : drop (i + 1) it)
@@ -217,7 +220,7 @@ put args _ value = argError "put" "Scope, [[Any, Any]]" args value
 assign args scope _ =
     if (mod (length args) 2) > 0 then
         PError (PString "ArgumentError") $ "= expects even number of arguments, received " ++ (show args)
-    else PAssignScope $ (put' args) ++ scope
+    else PAssignScope $ put' args
 
 hashMap' [] = []
 hashMap' (value:name:xs) = (value, name) : hashMap' xs
@@ -233,14 +236,18 @@ and' _ _ it = it
 or' [expression] _ (PBool False) = expression
 or' _ _ value = value
 
-import' _ oldScope (PScope scope) = PAssignScope (scope ++ oldScope)
+import' _ _ (PScope scope) = PAssignScope scope
 import' args _ value = argError "import" "Scope" args value
+
+error' (PString t:PString msg:[]) _ value =
+    PError (PString t) msg
 
 metaExpressions =
     resolvingArgs (\fn args scope value -> fn args scope value)
     $ quoteNames [
         ("meta", meta),
         ("=", assign),
+        ("error", error'),
         ("put", put),
         ("import", import'),
         ("unmeta", unmeta'),
@@ -254,24 +261,30 @@ metaExpressions =
 
 
 
-catch :: Scope -> [PValue] -> PValue -> IO PValue
 catch _ (name:value:[]) it@(PError typeName _) =
-    return $ if typeName == name then value else it
+    if typeName == name then value else it
 
-catch _ _ any = return $ any
+catch _ _ any = any
 
-log' _ [name] value = do
-    putStrLn $ "Log (" ++ (show name) ++ "): " ++ (show value)
-    return value
+isError _ (name:value:[]) it@(PError typeName _) =
+    if typeName == name then PBool True else PBool False
 
-log' _ [] value = do
-    putStrLn $ "Log: " ++ (show value)
-    return value
+isError _ _ _ = PBool False
+
+-- log' _ [name] value =
+--     PInput $ do
+--         putStrLn $ "Log (" ++ (show name) ++ "): " ++ (show value)
+--         return value
+
+-- log' _ [] value = PInput $ do
+--     putStrLn $ "Log: " ++ (show value)
+--     return value
 
 bareExpressions =
     quoteNames [
         ("catch", PFunction catch),
-        ("log", PFunction log'),
+        ("isError", PFunction isError),
+        -- ("log", PFunction log'),
         ("newScope", PScope [])
     ]
 
