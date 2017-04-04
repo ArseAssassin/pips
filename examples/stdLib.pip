@@ -1,31 +1,74 @@
+= 'id '(to input),
 = 'list '(to args),
-= 'bindArgs (to '(to newScope, apply put (to args, zip parentArgs, flatten)),
+= 'args= (to '(apply = (to args, zip parentArgs, flatten)),
              meta 'accessParentScope (hashmap 'parentArgs 'args)),
 
 = 'drop '(
-    bindArgs 'i,
+    args= 'i,
     to input, == (list), or (to i, == 0), and input,
     or (to input, tail, recur (to i, - 1))),
 
-= 'take '(bindArgs 'i,
+= 'take '(args= 'i,
     to input, == (list),
     or (to i, == 0), and (list),
     or (to input, list (head) (tail, recur (to i, - 1)), flatten)),
 
 = '>> '(
     to args,
-    len, < 2, and (error 'ArgumentError ">> expects even number of arguments"),
+    len, == 0, and input,
     or (
+        to args,
         = 'fn (head)
           'arg (drop 1, head)
           'rest (drop 2),
 
-        to input, apply fn (list arg), apply >> rest)
+        to input, apply fn (list arg), apply recur rest)
 ),
 
-= 'plus '(bindArgs 'i, import,
-    to i, == 0, and input,
-    or '(to input, + 1, plus (to i, - 1))
+= 'case '(
+    apply (to args, head) (to args, tail),
+    catch 'PatternError (error 'MatchingError "Matching a case failed")
 ),
 
-to 1, plus 1
+= '*= '(apply = input),
+
+= 'isEmpty '(len, == 0),
+
+= 'list* '(
+    = 'i (to input),
+    = 'a (to args),
+    = 'errorMsg (error 'PatternError (str "list* input" i "couldn't satisfy given pattern" a)),
+    = 'inputLen '(to i, len),
+    = 'argsLen '(to a, len),
+
+    if  (inputLen, == 0, and (argsLen, == 0))
+            (list)
+        (inputLen, == 1, and (argsLen, == 1))
+            (to args, concat input)
+        (inputLen, > 0, and (argsLen, == 2))
+            (list (to args, head)
+                  (to input, head)
+                  (to args, . 1)
+                  (to input, tail))
+
+        (inputLen, > 1, and (argsLen, > 1))
+            (list (to args, head) (to input, head),
+             concat (to input, tail, apply recur (to args, tail)),
+             catch 'ArgumentError errorMsg)
+        errorMsg
+) 'list*= '(apply list* args, *=),
+
+= 'find '(args= 'fn,
+    to input, list*= 'value 'rest,
+
+    to value, fn,
+        and value,
+        or (to rest, recur fn),
+    catch 'PatternError (error 'ValueError (str "find couldn't satisfy given predicate"))
+),
+
+= 'match '(
+    to args, find '(isError 'MatchingError, not)
+),
+
+scope
