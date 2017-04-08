@@ -186,6 +186,9 @@ isBool _ [] (PBool _) = PBool True
 isBool _ [] _ = PBool False
 isBool _ args value = argError "isBool" "Any" args value
 
+symbol _ [(PString it)] _ = PSymbol it
+symbol _ args value = argError "symbol" "Void, String" args value
+
 defaultExpressions :: Object
 defaultExpressions =
     resolvingArgs
@@ -196,6 +199,7 @@ defaultExpressions =
         ("-", minus),
         ("<", lt),
         (">", gt),
+        ("symbol", symbol),
         ("zip", zip'),
         ("concat", concat'),
         ("split", split),
@@ -319,6 +323,8 @@ metaExpressions =
     ]
 
 
+put' (PMeta _ _ it:xs) = put' (it : xs)
+put' (PSymbol "_":value:xs) = (put' xs)
 put' (name:value:xs) = (name, PMeta (PString "name") name value) : (put' xs)
 put' [] = []
 
@@ -411,7 +417,7 @@ if' scope args value = argError "if" "Any, [[Boolean, Any], Any]" args value
 bareExpressions =
     map (\(name, value) -> (name, PMeta (PString "name") name value))
     $ quoteNames [
-        ("=", PFunction $ passArgErrors assign),
+        ("=", PFunction $ passArgErrors assign),
         ("put", PFunction $ passArgErrors put),
         ("catch", PFunction $ unmetaArgs $ unmetaValue catch),
         ("isError", PFunction $ unmetaArgs $ unmetaValue isError),
@@ -420,6 +426,7 @@ bareExpressions =
         ("comment", PFunction $ \_ _ value -> value),
         -- ("log", PFunction log'),
         ("newScope", PScope []),
+        ("_", PSymbol "_"),
         ("and", PFunction $ unmetaValue and'),
         ("or", PFunction $ passArgErrors $ unmetaValue or'),
         ("if", PFunction if'),

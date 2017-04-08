@@ -1,1 +1,3 @@
-to 'foo
+require '../examples/stdLib.pip, import,
+
+ls _ == False

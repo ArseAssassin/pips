@@ -1,5 +1,4 @@
 = 'fromLeft '(to input),
-= '_ '_,
 = 'args= (to '(apply = (to args, zip parentArgs, flatten)),
              meta 'accessParentScope (hashmap 'parentArgs 'args)),
 

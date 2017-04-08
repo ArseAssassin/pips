@@ -19,6 +19,7 @@ instance Eq (PValue -> PValue) where
 data PValue =
     PNum Int |
     PString String |
+    PSymbol String |
     PError PValue String |
     PThrown PValue |
     PScope Scope |
@@ -28,7 +29,25 @@ data PValue =
     PFunction Function |
     PInterrupt (IO PValue, PValue -> PValue) |
     PList [PValue] |
-    PBool Bool deriving (Eq)
+    PBool Bool
+
+instance Eq PValue where
+    (PSymbol "_") == _ = True
+    _ == (PSymbol "_") = True
+    (PNum a) == (PNum b) = a == b
+    (PString a) == (PString b) = a == b
+    (PSymbol a) == (PSymbol b) = a == b
+    (PThrown a) == (PThrown b) = a == b
+    (PScope a) == (PScope b) = a == b
+    (PHashMap a) == (PHashMap b) = a == b
+    (PAssignScope a) == (PAssignScope b) = a == b
+    (PMeta _ _ a) == (PMeta _ _ b) = a == b
+    (PList a) == (PList b) = a == b
+    (PBool a) == (PBool b) = a == b
+    (PError a a') == (PError b b') = and [a == b, a' == b']
+    (PFunction _) == _ = False
+    (PInterrupt _) == _ = False
+    _ == _ = False
 
 showScope scope =
     show (filter (\(_, val) ->
@@ -46,12 +65,13 @@ instance Show PValue where
     show (PAssignScope it) = "(AssignScope " ++ (showScope it) ++ ")"
     show (PMeta _ _ value@(PMeta _ _ _)) = show value
     show (PMeta _ _ value) = "(meta " ++ show value ++ ")"
-    show (PHashMap it) = "(HashMap " ++ (showScope it) ++ ")"
+    show (PHashMap it) = "(hashmap " ++ (showScope it) ++ ")"
     show (PFunction _) = "(Function)"
     show (PList []) = "(list)"
     show (PList values) = "(list " ++ (unwords $ map show values) ++ ")"
     show (PBool it) = (show it)
     show (PInterrupt _) = "(Interrupt)"
+    show (PSymbol it) = "(symbol " ++ it ++ ")"
 
 putInScope :: PValue -> PValue -> Scope -> Scope
 putInScope name value parent =
