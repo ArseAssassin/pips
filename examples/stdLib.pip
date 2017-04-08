@@ -1,17 +1,50 @@
-= 'id '(to input),
-= 'list '(to args),
+= 'fromLeft '(to input),
+= '_ '_,
 = 'args= (to '(apply = (to args, zip parentArgs, flatten)),
              meta 'accessParentScope (hashmap 'parentArgs 'args)),
 
+= '*= '(apply = input),
+
+= 'flipInput '(args= 'fn 'value,
+    to value, fn
+),
+
+= 'list* '(
+    = 'i (to input),
+    = 'a (to args),
+    = 'errorMsg '(throw 'PatternError (str "list* input " i " couldn't satisfy given pattern " a)),
+    = 'inputLen '(to i, len),
+    = 'argsLen '(to a, len),
+
+    if  (inputLen, == 0, and (argsLen, == 0)) (list)
+        (inputLen, == 1, and (argsLen, == 1)) (to args, concat input)
+        (inputLen, > 0, and (argsLen, == 2))
+            (list (to args, head)
+                 (to input, head)
+                 (to args, . 1)
+                 (to input, tail))
+        (inputLen, > 1, and (argsLen, > 1))
+            (catch (
+                list (to args, head) (to input, head),
+                concat (to input, tail, apply recur (to args, tail))
+            ) 'PatternError errorMsg)
+        (errorMsg)
+) 'list*= '(apply list* args, *=),
+
+= 'chunks '(args= 'size,
+    if (to input, len, == 0) (list)
+       (to input, take size, prepend (to input, drop size, chunks size))
+),
+
 = 'drop '(
     args= 'i,
-    to input, == (list), or (to i, == 0), and input,
-    or (to input, tail, recur (to i, - 1))),
+    to input,
+    if (== (list), or (to i, == 0)) input
+       (tail, recur (to i, - 1))),
 
 = 'take '(args= 'i,
-    to input, == (list),
-    or (to i, == 0), and (list),
-    or (to input, list (head) (tail, recur (to i, - 1)), flatten)),
+    if (to i, == 0, or (to input, == (list))) (list)
+       (to input, head, prepend (to input, tail, recur (to i, - 1)))),
 
 = '>> '(
     to args,
@@ -26,49 +59,92 @@
 ),
 
 = 'case '(
-    apply (to args, head) (to args, tail),
-    catch 'PatternError (error 'MatchingError "Matching a case failed")
+    catch
+        (apply (to args, head) (to args, tail))
+        'PatternError '(throw 'MatchingError "Matching a case failed")
 ),
-
-= '*= '(apply = input),
 
 = 'isEmpty '(len, == 0),
 
-= 'list* '(
-    = 'i (to input),
-    = 'a (to args),
-    = 'errorMsg (error 'PatternError (str "list* input" i "couldn't satisfy given pattern" a)),
-    = 'inputLen '(to i, len),
-    = 'argsLen '(to a, len),
-
-    if  (inputLen, == 0, and (argsLen, == 0))
-            (list)
-        (inputLen, == 1, and (argsLen, == 1))
-            (to args, concat input)
-        (inputLen, > 0, and (argsLen, == 2))
-            (list (to args, head)
-                  (to input, head)
-                  (to args, . 1)
-                  (to input, tail))
-
-        (inputLen, > 1, and (argsLen, > 1))
-            (list (to args, head) (to input, head),
-             concat (to input, tail, apply recur (to args, tail)),
-             catch 'ArgumentError errorMsg)
-        errorMsg
-) 'list*= '(apply list* args, *=),
+= 'ls '(to args, list*= 'i 'fn 'rest,
+    to i, apply fn rest
+),
 
 = 'find '(args= 'fn,
-    to input, list*= 'value 'rest,
+    to input, catch (list*= 'value 'rest) 'PatternError '(throw 'ValueError (str "find couldn't satisfy given predicate")),
 
-    to value, fn,
-        and value,
-        or (to rest, recur fn),
-    catch 'PatternError (error 'ValueError (str "find couldn't satisfy given predicate"))
+    if (to value, fn) value
+       (to rest, recur fn)
 ),
 
 = 'match '(
-    to args, find '(isError 'MatchingError, not)
+    = 'r recur,
+    = 'a args,
+    = 'i input,
+
+    if (ls a len, == 0) (throw 'PatternError "No matching pattern found")
+       (catch (to input, (to args, head)) 'MatchingError '(to i, apply r (to a, tail)))
+),
+
+= 'map '(args= 'fn,
+    = 'iter recur,
+
+    to input,
+    match
+        '(case list*= 'value 'rest, to value, fn, prepend (to rest, iter fn))
+        '(case list*=, list)
+),
+
+= 'filter '(args= 'fn,
+    = 'iter recur,
+
+    to input,
+    match
+        '(case list*=, list)
+        '(case list*= 'value 'rest,
+            if (to value, fn) (list value)
+               (list),
+            concat (to rest, iter fn))
+),
+
+= 'hashmap* '(
+    to args, match
+        '(case list*= 'name 'rest,
+            catch (to input, . name) 'LookupError '(throw 'MatchingError "Value not found"),
+            list name (fromLeft),
+            concat (to input, apply recur rest)
+        )
+        '(case list*=, list)
+) 'hashmap*= '(apply list* args, *=),
+
+= 'adjust '(args= 'i 'fn,
+    if (ls i > (ls input len)) (throw 'IndexError (str "Index " i " is out of bounds for list " input))
+       (ls i < 0) (throw 'IndexError (str "Can't adjust index " i))
+       (ls input take i,
+        append (ls input . i, fn),
+        concat (ls input drop (ls i + 1)))
+),
+
+= 'takeWhile '(args= 'fn,
+    to input, list*= 'value 'rest,
+    if (to value, fn) (to value, prepend (to rest, recur fn))
+       (list)
+),
+
+= 'reduce '(args= 'fn 'acc,
+    = 'iter recur,
+
+    to input, match
+        '(case list*= 'value 'rest,
+            to rest, iter fn (to acc, fn value))
+        '(case list*=, to acc)
+),
+
+= 'curry '(
+    = 'curriedArgs args,
+    = 'fn input,
+
+    '(apply fn (ls curriedArgs concat args))
 ),
 
 scope

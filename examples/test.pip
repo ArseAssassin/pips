@@ -1,7 +1,1 @@
-require '../examples/stdLib.pip, import,
-
-list 1 2 3,
-match
-    (case list*= 'foo 'bar 'baz, to baz)
-    (case list*= 'foo, to foo)
-    (case list*=, to 'foo)
+to 'foo

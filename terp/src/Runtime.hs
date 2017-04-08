@@ -20,6 +20,7 @@ data PValue =
     PNum Int |
     PString String |
     PError PValue String |
+    PThrown PValue |
     PScope Scope |
     PHashMap Object |
     PAssignScope Scope |
@@ -38,8 +39,9 @@ showScope scope =
 
 instance Show PValue where
     show (PNum it) = (show it)
-    show (PString it) = show it
+    show (PString it) = it
     show (PError value it) = "(Error " ++ (show value) ++ " " ++ it ++ ")"
+    show (PThrown it) = "(UncaughtError " ++ (show it) ++ ")"
     show scope@(PScope it) = "(Scope " ++ (showScope it) ++ ")"
     show (PAssignScope it) = "(AssignScope " ++ (showScope it) ++ ")"
     show (PMeta _ _ value@(PMeta _ _ _)) = show value

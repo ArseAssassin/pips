@@ -16,6 +16,4 @@ main = do
                      print e
         Right it -> do
             result <- runScript it defaultScope
-            putStrLn (case result of
-                PError typeName it -> (show typeName) ++ ": \n" ++ it
-                it -> show it)
+            putStrLn (show result)

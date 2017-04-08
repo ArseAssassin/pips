@@ -27,15 +27,15 @@ require' _ [PString name] _ =
         do
             script <- readFile name
             case parsePIPs name script of
-                Left it -> return $ PError (PString "ParsingError") (show it)
+                Left it -> return $ PThrown $ PError (PString "ParsingError") (show it)
                 Right it -> runScript it defaultScope,
         id
     )
 
 
 addSourcePos :: PValue -> SourcePos -> PValue
-addSourcePos (PError typeName it) sourcePos =
-    PError typeName $
+addSourcePos (PThrown (PError typeName it)) sourcePos =
+    PThrown $ PError typeName $
         it ++
         "\n  in " ++
         (sourceName sourcePos) ++
@@ -50,6 +50,7 @@ evalExpression (scope, val) (astNode:rest) =
                     _ -> (scope, eval astNode scope val)
     in case v of
         PInterrupt (io, fn) -> PInterrupt (io, \value -> evalExpression (s, fn value) rest)
+        it@(PThrown _) -> it
         _ -> evalExpression (s, v) rest
 
 evalExpression (scope, value) [] = value
@@ -65,7 +66,7 @@ eval (Term (fn:args) sourcePos) scope value =
                                 PHashMap vals -> map (\(name, parentName) ->
                                                     case findFromScope parentName scope of
                                                         Just it -> (name, it)
-                                                        Nothing -> (name, PError (PString "LookupError") $ "Couldn't find value " ++ (show name) ++ " from parent scope")
+                                                        Nothing -> (name, PThrown $ PError (PString "LookupError") $ "Couldn't find value " ++ (show name) ++ " from parent scope")
                                                 ) vals
                                 _ -> scope
                             & (putInScope (PString "__functionMeta") (meta scope [] evaledFn))
@@ -75,18 +76,18 @@ eval (Term (fn:args) sourcePos) scope value =
         in case unmeta evaledFn of
             PFunction fn ->
                 case fn updatedScope evaledArgs value of
-                    PError typeName it ->
+                    PThrown (PError typeName it) ->
                         case meta scope [PString "name"] evaledFn of
-                            PError _ _ -> PError typeName $ it ++ "\n" ++ (show sourcePos) ++ ": anonymous"
-                            PString name -> PError typeName $ it ++ "\n" ++ (show sourcePos) ++ ": " ++ name
+                            PThrown (PError _ _) -> PThrown $ PError typeName $ it ++ "\n" ++ (show sourcePos) ++ ": anonymous"
+                            PString name -> PThrown $ PError typeName $ it ++ "\n" ++ (show sourcePos) ++ ": " ++ name
                     it -> it
-            PError typeName it ->
+            PThrown (PError typeName it) ->
                 addSourcePos (
                     case meta updatedScope [PString "name"] evaledFn of
-                        PError (PString "LookupError") _ -> PError typeName it
-                        name -> PError typeName $ "While calling function " ++ (show name) ++ ": " ++ it
+                        PThrown (PError (PString "LookupError") _) -> PThrown $ PError typeName it
+                        name -> PThrown $ PError typeName $ "While calling function " ++ (show name) ++ ": " ++ it
                 ) sourcePos
-            it -> addSourcePos (PError (PString "ValueError") $ "Calling invalid function " ++ (show it)) sourcePos
+            it -> addSourcePos (PThrown (PError (PString "ValueError") $ "Calling invalid function " ++ (show it))) sourcePos
 
 eval (ExpressionLiteral astNode) scope _ =
     fn
@@ -103,7 +104,7 @@ eval (ExpressionLiteral astNode) scope _ =
 eval (Lookup name) scope _ =
     case findFromScope (PString name) scope of
         Just it -> it
-        Nothing -> PError (PString "LookupError") $ "Couldn't find value " ++ (show name) ++ " from scope"
+        Nothing -> PThrown $ PError (PString "LookupError") $ "Couldn't find value " ++ (show name) ++ " from scope"
 
 eval (NumLiteral i) _ _ = PNum i
 eval (StringLiteral s) _ _ = PString s
