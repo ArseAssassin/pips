@@ -1,6 +1,7 @@
 module Terp (runScript) where
 
 import Data.Function ((&))
+import qualified Data.Map.Lazy as Map
 
 import Text.ParserCombinators.Parsec.Pos (sourceName, sourceLine, sourceColumn, SourcePos)
 import AST
@@ -13,7 +14,7 @@ type Interrupt = (IO PValue, PValue -> PValue)
 runScript :: ASTNode -> Scope -> IO PValue
 runScript it scope =
     handleInterrupts $ eval it updatedScope (PScope updatedScope)
-    where updatedScope = putInScope (PString "require") (PFunction require') scope
+    where updatedScope = putInLib (PString "require") (PFunction require') scope
 
 handleInterrupts value =
     case value of
@@ -63,13 +64,14 @@ eval (Term (fn:args) sourcePos) scope value =
         let evaledFn = eval fn scope value
             evaledArgs = map (\it -> eval it scope value) args
             updatedScope = case meta scope [(PString "accessParentScope")] evaledFn of
-                                PHashMap vals -> map (\(name, parentName) ->
-                                                    case findFromScope parentName scope of
-                                                        Just it -> (name, it)
-                                                        Nothing -> (name, PThrown $ PError (PString "LookupError") $ "Couldn't find value " ++ (show name) ++ " from parent scope")
-                                                ) vals
-                                _ -> []
-                            & (putInScope (PString "__functionMeta") (meta scope [] evaledFn))
+                                PHashMap vals -> Scope (Map.fromList $ map (\(name, parentName) ->
+                                                        case findFromScope parentName scope of
+                                                            Just it -> (name, it)
+                                                            Nothing -> (name, PThrown $ PError (PString "LookupError") $ "Couldn't find value " ++ (show name) ++ " from parent scope")
+                                                       ) $ Map.toList vals)
+                                                       Map.empty
+                                _ -> emptyScope
+                            & (putInLib (PString "__functionMeta") (meta scope [] evaledFn))
 
         in case unmeta evaledFn of
             PFunction fn ->
@@ -92,11 +94,13 @@ eval (ExpressionLiteral astNode) scope _ =
     where fn = PFunction $
                 \newScope args value ->
                     let metaFn = case findFromScope (PString "__functionMeta") newScope of
-                                    Just (PHashMap it) -> foldl (\value (name, val) -> PMeta name val value) fn it
+                                    Just (PHashMap it) -> foldl (\value (name, val) -> PMeta name val value) fn $Map.toList it
                                     Nothing -> fn
-                        updatedScope = [(PString "_args", (PList args)),
-                                        (PString "_input", value),
-                                        (PString "_recur", fn)] ++ newScope ++ scope
+                        newLocals = [(PString "_args", (PList args)),
+                                     (PString "_input", value),
+                                     (PString "_recur", fn)]
+                        updatedScope = mergeScopes (Scope Map.empty (Map.fromList newLocals))
+                                       $ mergeScopes newScope scope
                         in eval astNode updatedScope value
 
 eval (Lookup name) scope _ =

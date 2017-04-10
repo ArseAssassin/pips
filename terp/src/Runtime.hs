@@ -1,11 +1,21 @@
 {-# LANGUAGE FlexibleInstances #-}
 module Runtime where
 
-import Data.List (find)
+import Data.List (intercalate)
+import qualified Data.Map.Lazy as Map
 
-type Object = [(PValue, PValue)]
-type Scope = Object
+type Object = Map.Map PValue PValue
+data Scope = Scope Object Object deriving (Eq, Ord, Show)
 type Function = Scope -> [PValue] -> PValue -> PValue
+
+showObject :: Object -> String
+showObject it = showPairs $ Map.toList it
+
+showPairs it = "(hashmap " ++ s ++ ")"
+    where s = unwords $ map (
+                \(key, value) ->
+                    (show key) ++ " " ++ (show value)
+            ) it
 
 instance Eq Function where
     a == b = False
@@ -49,19 +59,37 @@ instance Eq PValue where
     (PInterrupt _) == _ = False
     _ == _ = False
 
-showScope scope =
-   "(Scope)"
+instance Ord PValue where
+    compare (PSymbol "_") _ = EQ
+    compare _ (PSymbol "_") = EQ
+    compare (PNum a) (PNum b) = compare a b
+    compare (PString a) (PString b) = compare a b
+    compare (PSymbol a) (PSymbol b) = compare a b
+    compare (PThrown a) (PThrown b) = compare a b
+    compare (PScope a) (PScope b) = compare a b
+    compare (PHashMap a) (PHashMap b) = compare a b
+    compare (PAssignScope a) (PAssignScope b) = compare a b
+    compare (PMeta _ _ a) b = compare a b
+    compare b (PMeta _ _ a) = compare a b
+    compare (PList a) (PList b) = compare a b
+    compare (PBool a) (PBool b) = compare a b
+    compare (PError a _) (PError b _) = compare a b
+    compare (PFunction _) _ = EQ
+    compare _ (PFunction _) = EQ
+    compare (PInterrupt _) _ = EQ
+    compare _ (PInterrupt _) = EQ
+    compare _ _ = EQ
 
 instance Show PValue where
     show (PNum it) = (show it)
     show (PString it) = it
     show (PError value it) = "(Error " ++ (show value) ++ " " ++ it ++ ")"
     show (PThrown it) = "(UncaughtError " ++ (show it) ++ ")"
-    show scope@(PScope it) = "(Scope " ++ (showScope it) ++ ")"
-    show (PAssignScope it) = "(AssignScope " ++ (showScope it) ++ ")"
+    show (PScope (Scope locals _)) = "(Scope " ++ (showObject locals) ++ ")"
+    show (PAssignScope (Scope locals _)) = "(AssignScope " ++ (showObject locals) ++ ")"
     show (PMeta _ _ value@(PMeta _ _ _)) = show value
-    show (PMeta _ _ value) = "(meta " ++ show value ++ ")"
-    show (PHashMap it) = "(hashmap " ++ (showScope it) ++ ")"
+    show (PMeta _ _ value) = "~" ++ show value
+    show (PHashMap it) = "(hashmap " ++ (show it) ++ ")"
     show (PFunction _) = "(Function)"
     show (PList []) = "(list)"
     show (PList values) = "(list " ++ (unwords $ map show values) ++ ")"
@@ -70,17 +98,27 @@ instance Show PValue where
     show (PSymbol it) = "(symbol " ++ it ++ ")"
 
 putInScope :: PValue -> PValue -> Scope -> Scope
-putInScope name value parent =
-    (name, value) : parent
+putInScope name value (Scope local parent) =
+    Scope (Map.insert name value local) parent
 
-findValue :: PValue -> Object -> Maybe PValue
-findValue name object =
-    case find ((name == ) . fst) object of
-        Nothing -> Nothing
-        Just (_, x) -> Just x
+putInLib name value (Scope local parent) =
+    Scope local (Map.insert name value parent)
+
+findValue :: PValue -> Scope -> Maybe PValue
+findValue (PString "scope") it = Just $ PScope it
+
+findValue name (Scope local parent) =
+    case (Map.!?) local name of
+        Nothing -> (Map.!?) parent name
+        it -> it
 
 findFromScope name scope =
     findValue name scope
 
-mergeScopes a b = this
-    where this = concat [[(PString "scope", PScope this)], a, b]
+mergeScopes :: Scope -> Scope -> Scope
+mergeScopes (Scope locals lib) (Scope locals' lib') =
+    (Scope (mergeObjects locals locals') (mergeObjects lib lib'))
+    where mergeObjects a b = Map.fromList $ (Map.toList b) ++ (Map.toList a)
+
+emptyScope :: Scope
+emptyScope = Scope Map.empty Map.empty

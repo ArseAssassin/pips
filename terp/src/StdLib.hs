@@ -3,6 +3,7 @@ module StdLib where
 import Runtime
 import Data.List.Split (splitOn)
 import Data.List (find)
+import qualified Data.Map.Lazy as Map
 
 argError _ _ _ it@(PThrown _) = it
 argError name expected args value = PThrown $ PError (PString "ArgumentError") $ "Invalid arguments: " ++ name ++ " expects " ++ expected ++ " as argument but received \n" ++ (show value) ++ " as value, \n" ++ (show args) ++ " as args"
@@ -83,7 +84,7 @@ hashMap' [] = []
 hashMap' (value:name:xs) = (value, name) : hashMap' xs
 hashMap _ args value =
     if (mod (length args) 2) == 0
-        then PHashMap $ hashMap' args
+        then PHashMap $ Map.fromList $ hashMap' args
         else argError "hashmap" "[[Any, Any]]" args value
 
 append' scope args (PList it) =
@@ -105,7 +106,7 @@ getElement _ [PNum i] (PString it) =
         else PString $ [it !! i]
 
 getElement _ [key] (PHashMap it) =
-    case findFromScope key it of
+    case (Map.!?) it key of
         Just it -> it
         Nothing -> PThrown $ PError (PString "IndexError") "Couldn't find value from hashmap"
 
@@ -189,7 +190,6 @@ isBool _ args value = argError "isBool" "Any" args value
 symbol _ [(PString it)] _ = PSymbol it
 symbol _ args value = argError "symbol" "Void, String" args value
 
-defaultExpressions :: Object
 defaultExpressions =
     resolvingArgs
     $ map (adjustFn normalizeAll)
@@ -234,7 +234,7 @@ defaultExpressions =
 
 
 apply scope ((PFunction fn):(PList args):[]) value =
-    fn [] args value
+    fn emptyScope args value
 
 apply _ args value = argError "apply" "Any, Any -> Any, List" args value
 
@@ -298,7 +298,7 @@ meta scope (name:[]) (PMeta metaName value child) =
     if metaName == name then value else meta scope [name] child
 meta _ (name:[]) value = PThrown $ PError (PString "LookupError") $ "Metadata " ++ (show name) ++ " not found from " ++ (show value)
 meta _ [] value =
-    PHashMap $ reverse $ meta' value
+    PHashMap $ Map.fromList $ reverse $ meta' value
     where meta' (PMeta metaName metaValue value) = (metaName, metaValue) : meta' value
           meta' value = []
 
@@ -330,19 +330,19 @@ put' [] = []
 put _ args (PScope scope) =
     if (mod (length args) 2) > 0 then
         PThrown $ PError (PString "ArgumentError") $ "= expects even number of arguments, received " ++ (show args)
-    else PScope $ (put' args) ++ scope
+    else PScope $ mergeScopes (Scope (Map.fromList $ put' args) Map.empty) scope
 
 put _ args value = argError "put" "Scope, [[Any, Any]]" args value
 
 assign scope args _ =
     if (mod (length args) 2) > 0 then
         PThrown $ PError (PString "ArgumentError") $ "= expects even number of arguments, received " ++ (show args)
-    else PAssignScope $ put' args
+    else PAssignScope $ Scope (Map.fromList $ put' args) Map.empty
 
 
 catch scope (error@(PThrown e@(PError typeName _)):caughtType:(PFunction fn):[]) value =
     if typeName == caughtType
-        then fn [] [] e
+        then fn emptyScope [] e
         else error
 
 catch scope (value:_:_:[]) _ =
@@ -390,7 +390,7 @@ or' _ [expression] (PBool False) = expression
 or' _ [_] value = value
 or' _ args value = argError "or" "Any, Any" args value
 
-import' _ _ (PScope scope) = PAssignScope scope
+import' _ _ (PScope (Scope locals _)) = PAssignScope $ Scope Map.empty locals
 import' _ args value = argError "import" "Scope" args value
 
 to _ [value] _ = value
@@ -424,7 +424,7 @@ bareExpressions =
         ("throw", PFunction $ passArgErrors throw'),
         ("comment", PFunction $ \_ _ value -> value),
         -- ("log", PFunction log'),
-        ("newScope", PScope []),
+        ("newScope", PScope emptyScope),
         ("_", PSymbol "_"),
         ("and", PFunction $ unmetaValue and'),
         ("or", PFunction $ passArgErrors $ unmetaValue or'),
@@ -438,11 +438,10 @@ bareExpressions =
     ]
 
 
-defaultValues :: Object
 defaultValues = quoteNames [("True", PBool True), ("False", PBool False)]
 
-defaultLib :: Object
-defaultLib = concat [defaultExpressions, defaultValues, metaExpressions, bareExpressions, scopeExpressions]
+defaultLib :: Scope
+defaultLib = Scope Map.empty $ Map.fromList $ concat [defaultExpressions, defaultValues, metaExpressions, bareExpressions, scopeExpressions]
 
 defaultScope :: Scope
 defaultScope = defaultLib

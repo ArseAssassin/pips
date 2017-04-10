@@ -4,7 +4,7 @@ import System.Console.Haskeline
 import Data.Char (isSpace)
 import Control.Monad.IO.Class (liftIO)
 
-import Lib (parsePIPs, runScript, PValue(PError, PAssignScope), defaultScope)
+import Lib (parsePIPs, runScript, PValue(PError, PAssignScope), defaultScope, mergeScopes)
 
 trim = f . f
     where f = reverse . dropWhile isSpace
@@ -40,7 +40,7 @@ main = runInputT defaultSettings $ loop defaultScope
                             loop scope
 
                         PAssignScope newScope -> do
-                            loop $ newScope ++ scope
+                            loop $ mergeScopes newScope scope
 
                         it -> do
                             outputStrLn $ show $ it
