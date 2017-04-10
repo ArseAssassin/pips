@@ -5,7 +5,7 @@ import Data.List.Split (splitOn)
 import Data.List (find)
 
 argError _ _ _ it@(PThrown _) = it
-argError name expected args value = PError (PString "ArgumentError") $ "Invalid arguments: " ++ name ++ " expects " ++ expected ++ " as argument but received " ++ (show value) ++ " as value, " ++ (show args) ++ " as args"
+argError name expected args value = PThrown $ PError (PString "ArgumentError") $ "Invalid arguments: " ++ name ++ " expects " ++ expected ++ " as argument but received \n" ++ (show value) ++ " as value, \n" ++ (show args) ++ " as args"
 
 unmetaArgs fn scope args val = fn scope (map unmeta args) val
 passArgErrors fn scope args val =
@@ -234,7 +234,7 @@ defaultExpressions =
 
 
 apply scope ((PFunction fn):(PList args):[]) value =
-    fn scope args value
+    fn [] args value
 
 apply _ args value = argError "apply" "Any, Any -> Any, List" args value
 
@@ -318,8 +318,7 @@ metaExpressions =
         ("meta", passArgErrors meta),
         ("import", import'),
         ("unmeta", unmeta'),
-        ("doc", passArgErrors doc),
-        ("scope", \scope _ _ -> PScope scope)
+        ("doc", passArgErrors doc)
     ]
 
 
@@ -343,7 +342,7 @@ assign scope args _ =
 
 catch scope (error@(PThrown e@(PError typeName _)):caughtType:(PFunction fn):[]) value =
     if typeName == caughtType
-        then fn scope [] e
+        then fn [] [] e
         else error
 
 catch scope (value:_:_:[]) _ =

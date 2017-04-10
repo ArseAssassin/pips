@@ -50,11 +50,7 @@ instance Eq PValue where
     _ == _ = False
 
 showScope scope =
-    show (filter (\(_, val) ->
-                    case val of
-                        PScope it -> it /= scope
-                        _ -> True
-         ) scope)
+   "(Scope)"
 
 instance Show PValue where
     show (PNum it) = (show it)
@@ -86,4 +82,5 @@ findValue name object =
 findFromScope name scope =
     findValue name scope
 
-mergeScopes a b = concat [a, b]
+mergeScopes a b = this
+    where this = concat [[(PString "scope", PScope this)], a, b]

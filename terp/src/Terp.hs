@@ -68,11 +68,9 @@ eval (Term (fn:args) sourcePos) scope value =
                                                         Just it -> (name, it)
                                                         Nothing -> (name, PThrown $ PError (PString "LookupError") $ "Couldn't find value " ++ (show name) ++ " from parent scope")
                                                 ) vals
-                                _ -> scope
+                                _ -> []
                             & (putInScope (PString "__functionMeta") (meta scope [] evaledFn))
-                            & \scope -> case meta scope [(PString "includeLocals")] evaledFn of
-                                        PHashMap vals -> mergeScopes scope vals
-                                        _ -> scope
+
         in case unmeta evaledFn of
             PFunction fn ->
                 case fn updatedScope evaledArgs value of
@@ -96,9 +94,9 @@ eval (ExpressionLiteral astNode) scope _ =
                     let metaFn = case findFromScope (PString "__functionMeta") newScope of
                                     Just (PHashMap it) -> foldl (\value (name, val) -> PMeta name val value) fn it
                                     Nothing -> fn
-                        updatedScope = [(PString "args", (PList args)),
-                                        (PString "input", value),
-                                        (PString "recur", fn)] ++ newScope ++ scope
+                        updatedScope = [(PString "_args", (PList args)),
+                                        (PString "_input", value),
+                                        (PString "_recur", fn)] ++ newScope ++ scope
                         in eval astNode updatedScope value
 
 eval (Lookup name) scope _ =

@@ -1,19 +1,15 @@
-= 'fromLeft '(to input),
-= 'args= (to '(apply = (to args, zip parentArgs, flatten)),
-             meta 'accessParentScope (hashmap 'parentArgs 'args)),
+= 'fn (to '(= 'args args 'input input 'recur recur),
+      meta 'accessParentScope (hashmap 'args '_args 'input '_input 'recur '_recur)),
+= 'fromLeft '(to _input),
+= 'args= (to '(apply = (to _args, zip parentArgs, flatten)),
+             meta 'accessParentScope (hashmap 'parentArgs '_args)),
 
-= '*= '(apply = input),
+= '*= '(apply = _input),
 
-= 'flipInput '(args= 'fn 'value,
-    to value, fn
-),
-
-= 'list* '(
-    = 'i (to input),
-    = 'a (to args),
-    = 'errorMsg '(throw 'PatternError (str "list* input " i " couldn't satisfy given pattern " a)),
-    = 'inputLen '(to i, len),
-    = 'argsLen '(to a, len),
+= 'list* '(fn,
+    = 'errorMsg '(throw 'PatternError (str "list* input " input " couldn't satisfy given pattern " args)),
+    = 'inputLen '(to input, len),
+    = 'argsLen '(to args, len),
 
     if  (inputLen, == 0, and (argsLen, == 0)) (list)
         (inputLen, == 1, and (argsLen, == 1)) (to args, concat input)
@@ -28,85 +24,79 @@
                 concat (to input, tail, apply recur (to args, tail))
             ) 'PatternError errorMsg)
         (errorMsg)
-) 'list*= '(apply list* args, *=),
+), = 'list*= '(apply list* _args, *=),
 
-= 'chunks '(args= 'size,
+= 'chunks '(fn, args= 'size,
     if (to input, len, == 0) (list)
        (to input, take size, prepend (to input, drop size, chunks size))
 ),
 
-= 'drop '(
+= 'drop '(fn,
     args= 'i,
     to input,
     if (== (list), or (to i, == 0)) input
        (tail, recur (to i, - 1))),
 
-= 'take '(args= 'i,
+= 'take '(fn, args= 'i,
     if (to i, == 0, or (to input, == (list))) (list)
        (to input, head, prepend (to input, tail, recur (to i, - 1)))),
 
-= '>> '(
+= '>> '(fn,
     to args,
     len, == 0, and input,
     or (
         to args,
-        = 'fn (head)
+        = 'f (head)
           'arg (drop 1, head)
           'rest (drop 2),
 
-        to input, apply fn (list arg), apply recur rest)
+        to input, apply f (list arg), apply recur rest)
 ),
 
-= 'case '(
+= 'case '(fn,
     catch
-        (apply (to args, head) (to args, tail))
+        (to input, apply (to args, head) (to args, tail))
         'PatternError '(throw 'MatchingError "Matching a case failed")
 ),
 
 = 'isEmpty '(len, == 0),
 
-= 'ls '(to args, list*= 'i 'fn 'rest,
-    to i, apply fn rest
+= 'ls '(
+    to _args, list*= 'i 'f 'rest,
+    to i, apply f rest
 ),
 
-= 'find '(args= 'fn,
+= 'find '(fn, args= 'f,
     to input, catch (list*= 'value 'rest) 'PatternError '(throw 'ValueError (str "find couldn't satisfy given predicate")),
 
-    if (to value, fn) value
-       (to rest, recur fn)
+    if (to value, f) value
+       (to rest, recur f)
 ),
 
-= 'match '(
-    = 'r recur,
-    = 'a args,
-    = 'i input,
-
-    if (ls a len, == 0) (throw 'PatternError "No matching pattern found")
-       (catch (to input, (to args, head)) 'MatchingError '(to i, apply r (to a, tail)))
+= 'match '(fn,
+    to input,
+    if (ls args len, == 0) (throw 'PatternError "No matching pattern found")
+       (catch (to input, (to args, head)) 'MatchingError '(to input, apply recur (to args, tail)))
 ),
 
-= 'map '(args= 'fn,
-    = 'iter recur,
-
+= 'map '(fn, args= 'f,
     to input,
     match
-        '(case list*= 'value 'rest, to value, fn, prepend (to rest, iter fn))
+        '(case list*= 'value 'rest, to value, f, prepend (to rest, recur f))
         '(case list*=, list)
 ),
 
-= 'filter '(args= 'fn,
-    = 'iter recur,
-
+= 'filter '(fn, args= 'f,
     to input,
     match
         '(case list*=, list)
         '(case list*= 'value 'rest,
-            if (to value, fn) (list value)
+            if (to value, f) (list value)
                (list),
-            concat (to rest, iter fn))
+            concat (to rest, recur f))
 ),
 
-= 'hashmap* '(
+= 'hashmap* '(fn,
     to args, match
         '(case list*= 'name 'rest,
             catch (to input, . name) 'LookupError '(throw 'MatchingError "Value not found"),
@@ -114,36 +104,48 @@
             concat (to input, apply recur rest)
         )
         '(case list*=, list)
-) 'hashmap*= '(apply list* args, *=),
+), = 'hashmap*= '(apply list* _args, *=),
 
-= 'adjust '(args= 'i 'fn,
+= 'adjust '(fn, args= 'i 'f,
     if (ls i > (ls input len)) (throw 'IndexError (str "Index " i " is out of bounds for list " input))
        (ls i < 0) (throw 'IndexError (str "Can't adjust index " i))
        (ls input take i,
-        append (ls input . i, fn),
+        append (ls input . i, f),
         concat (ls input drop (ls i + 1)))
 ),
 
-= 'takeWhile '(args= 'fn,
-    to input, list*= 'value 'rest,
-    if (to value, fn) (to value, prepend (to rest, recur fn))
-       (list)
-),
-
-= 'reduce '(args= 'fn 'acc,
-    = 'iter recur,
-
+= 'dropWhile '(fn, args= 'f,
     to input, match
         '(case list*= 'value 'rest,
-            to rest, iter fn (to acc, fn value))
+            if (to value, f) (to rest, recur f)
+               input)
+        '(case list*, list)
+),
+
+= 'takeWhile '(fn, args= 'f,
+    to input, match
+        '(case list*= 'value 'rest,
+            if (to value, f) (to value, prepend (to rest, recur f))
+               (list)
+        )
+        '(case list*, list)
+    ),
+
+= 'reduce '(fn, args= 'f 'acc,
+    to input, match
+        '(case list*= 'value 'rest, to rest, recur f (to acc, f value))
         '(case list*=, to acc)
 ),
 
-= 'curry '(
-    = 'curriedArgs args,
-    = 'fn input,
-
-    '(apply fn (ls curriedArgs concat args))
+= 'curry '(fn,
+    to '(apply input (ls args concat _args))
 ),
 
-scope
+= 'reduceArgs '(fn,
+    to args,
+    match
+        '(case list*= 'f 'fnArgs, ls fnArgs reduce f input)
+        '(to input)
+),
+
+to scope
