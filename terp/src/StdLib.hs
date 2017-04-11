@@ -4,6 +4,8 @@ import Runtime
 import Data.List.Split (splitOn)
 import Data.List (find)
 import qualified Data.Map.Lazy as Map
+import Conduit
+import Data.ByteString.Char8 (unpack, pack)
 
 argError _ _ _ it@(PThrown _) = it
 argError name expected args value = PThrown $ PError (PString "ArgumentError") $ "Invalid arguments: " ++ name ++ " expects " ++ expected ++ " as argument but received \n" ++ (show value) ++ " as value, \n" ++ (show args) ++ " as args"
@@ -413,6 +415,17 @@ if' _ [else'] _ =
 
 if' scope args value = argError "if" "Any, [[Boolean, Any], Any]" args value
 
+pack' (PString it) =
+    pack it
+
+pack' value =
+    pack $ show (PThrown (PError (PString "TypeError") $ "Type PString expected, " ++ (show value) ++ " received"))
+
+connect' _ [PConsumer b] (PProducer a) =
+    PEffect $ a .| b
+
+constant' _ [it] _ = PProducer $ yield it
+
 bareExpressions =
     map (\(name, value) -> (name, PMeta (PString "name") name value))
     $ quoteNames [
@@ -422,10 +435,14 @@ bareExpressions =
         ("isError", PFunction $ unmetaArgs $ unmetaValue isError),
         ("error", PFunction $ passArgErrors error'),
         ("throw", PFunction $ passArgErrors throw'),
+        ("connect", PFunction $ normalizeAll connect'),
+        ("constant", PFunction $ normalizeAll constant'),
         ("comment", PFunction $ \_ _ value -> value),
         -- ("log", PFunction log'),
         ("newScope", PScope emptyScope),
         ("_", PSymbol "_"),
+        ("stdin", PProducer $ stdinC .| mapC unpack .| mapC PString),
+        ("stdout", PConsumer $ mapC pack' .| stdoutC),
         ("and", PFunction $ unmetaValue and'),
         ("or", PFunction $ passArgErrors $ unmetaValue or'),
         ("if", PFunction if'),

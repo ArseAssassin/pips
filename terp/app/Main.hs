@@ -2,7 +2,9 @@ module Main where
 
 import System.Environment (getArgs)
 
-import Lib (parsePIPs, runScript, PValue(PError), defaultScope)
+import Lib (parsePIPs, runScript, PValue(PError, PEffect), defaultScope, unmeta)
+
+import Conduit
 
 main :: IO ()
 main = do
@@ -16,4 +18,7 @@ main = do
                      print e
         Right it -> do
             result <- runScript it defaultScope
-            putStrLn (show result)
+
+            case unmeta result of
+                PEffect it -> runConduit it
+                _ -> putStrLn (show result)
