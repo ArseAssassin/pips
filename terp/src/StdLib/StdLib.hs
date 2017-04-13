@@ -1,32 +1,12 @@
 module StdLib where
 
 import Runtime
+import StdLib.Helpers
+import StdLib.Stream (streamValues)
 import Data.List.Split (splitOn)
 import Data.List (find)
+import Data.Char (isSpace)
 import qualified Data.Map.Lazy as Map
-import Conduit
-import Data.ByteString.Char8 (unpack, pack)
-
-argError _ _ _ it@(PThrown _) = it
-argError name expected args value = PThrown $ PError (PString "ArgumentError") $ "Invalid arguments: " ++ name ++ " expects " ++ expected ++ " as argument but received \n" ++ (show value) ++ " as value, \n" ++ (show args) ++ " as args"
-
-unmetaArgs fn scope args val = fn scope (map unmeta args) val
-passArgErrors fn scope args val =
-    case find (\it -> case it of
-            PThrown _ -> True
-            _ -> False
-        ) args of
-        Just it -> it
-        _ -> fn scope args val
-normalizeArgs fn = unmetaArgs $ passArgErrors fn
-
-unmetaValue fn scope args val = fn scope args $ unmeta val
-
-normalizeValue fn = unmetaValue fn
-
-normalizeAll fn = normalizeArgs $ normalizeValue fn
-
-adjustFn fn (name, value) = (name, fn value)
 
 plus _ [(PNum b)] (PNum a) =  PNum $ a + b
 plus _ args val = argError "+" "Number" args val
@@ -40,6 +20,7 @@ mod' _ (PNum b:[]) (PNum a) = PNum $ mod a b
 mod' _ args val = argError "mod" "Num, Num" args val
 
 eq _ (arg:[]) val = PBool $ unmeta arg == unmeta val
+ne _ (arg:[]) val = PBool $ not $ unmeta arg == unmeta val
 
 range _ ((PNum max):[]) (PNum i) =
     PList $ map PNum [i..max]
@@ -51,6 +32,7 @@ join _ _ (PList [it]) = it
 join _ args val = argError "join" "List, String" args val
 
 
+str _ [] value = PString $ show value
 str scope values _ = join scope [PString ""] (PList (map (PString . show) values))
 
 flatten' :: Function
@@ -122,8 +104,6 @@ last' _ [] (PList it) = last it
 
 zip' _ [(PList b)] (PList a) = PList $ map (\(a, b) -> PList [a, b]) $ zip a b
 zip' _ args val = argError "zip" "list, list" args val
-
-quoteNames = map $ \(name, value) -> (PString name, value)
 
 split _ (PString "":[]) (PString s) =
     PList $ map PString $ drop 1 $ splitOn "" s
@@ -215,6 +195,11 @@ defaultExpressions =
         ("join", join),
         ("str", str),
         ("==", eq),
+        ("!==", ne),
+        ("trim", \_ _ (PString it) ->
+                    let f = reverse . dropWhile isSpace
+                    in PString $ (f . f) it
+            ),
         ("not", not'),
         ("mod", mod'),
         ("range", range),
@@ -304,8 +289,6 @@ meta _ [] value =
     where meta' (PMeta metaName metaValue value) = (metaName, metaValue) : meta' value
           meta' value = []
 
-unmeta (PMeta _ _ it) = unmeta it
-unmeta any = any
 unmeta' _ [] it = unmeta it
 
 doc scope (doc:[]) value = meta scope [PString "doc", doc] value
@@ -415,17 +398,6 @@ if' _ [else'] _ =
 
 if' scope args value = argError "if" "Any, [[Boolean, Any], Any]" args value
 
-pack' (PString it) =
-    pack it
-
-pack' value =
-    pack $ show (PThrown (PError (PString "TypeError") $ "Type PString expected, " ++ (show value) ++ " received"))
-
-connect' _ [PConsumer b] (PProducer a) =
-    PEffect $ a .| b
-
-constant' _ [it] _ = PProducer $ yield it
-
 bareExpressions =
     map (\(name, value) -> (name, PMeta (PString "name") name value))
     $ quoteNames [
@@ -435,14 +407,10 @@ bareExpressions =
         ("isError", PFunction $ unmetaArgs $ unmetaValue isError),
         ("error", PFunction $ passArgErrors error'),
         ("throw", PFunction $ passArgErrors throw'),
-        ("connect", PFunction $ normalizeAll connect'),
-        ("constant", PFunction $ normalizeAll constant'),
-        ("comment", PFunction $ \_ _ value -> value),
-        -- ("log", PFunction log'),
+
         ("newScope", PScope emptyScope),
         ("_", PSymbol "_"),
-        ("stdin", PProducer $ stdinC .| mapC unpack .| mapC PString),
-        ("stdout", PConsumer $ mapC pack' .| stdoutC),
+
         ("and", PFunction $ unmetaValue and'),
         ("or", PFunction $ passArgErrors $ unmetaValue or'),
         ("if", PFunction if'),
@@ -458,7 +426,7 @@ bareExpressions =
 defaultValues = quoteNames [("True", PBool True), ("False", PBool False)]
 
 defaultLib :: Scope
-defaultLib = Scope Map.empty $ Map.fromList $ concat [defaultExpressions, defaultValues, metaExpressions, bareExpressions, scopeExpressions]
+defaultLib = Scope Map.empty $ Map.fromList $ concat [defaultExpressions, defaultValues, metaExpressions, bareExpressions, scopeExpressions, streamValues]
 
 defaultScope :: Scope
 defaultScope = defaultLib

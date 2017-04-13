@@ -20,5 +20,5 @@ main = do
             result <- runScript it defaultScope
 
             case unmeta result of
-                PEffect it -> runConduit it
+                PEffect it -> runConduitRes it
                 _ -> putStrLn (show result)

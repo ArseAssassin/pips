@@ -7,6 +7,7 @@ import Text.ParserCombinators.Parsec.Pos (sourceName, sourceLine, sourceColumn, 
 import AST
 import Runtime
 import StdLib
+import StdLib.Helpers (unmeta)
 import PIPsParser
 
 type Interrupt = (IO PValue, PValue -> PValue)

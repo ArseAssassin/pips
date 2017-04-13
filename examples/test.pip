@@ -1,1 +1,2 @@
-constant 'bar, connect stdout
+require '../examples/stdLib.pip, import,
+constant 'foo, reduceArgs combine (constant 'bar) (constant 'baz), mapStream '(join " "), connect stdout

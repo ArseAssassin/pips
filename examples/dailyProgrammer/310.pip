@@ -1,0 +1,7 @@
+require '../examples/stdLib.pip, import,
+
+to s.stdin, s.flatMap '(
+    trim, parseInt, ls 0 range (fromLeft), s.value
+),
+s.map '(map str, join " "),
+s.sink s.stdout

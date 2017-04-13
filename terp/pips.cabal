@@ -14,14 +14,17 @@ extra-source-files:  README.md
 cabal-version:       >=1.10
 
 library
-  hs-source-dirs:      src
+  hs-source-dirs:      src, src/StdLib
   exposed-modules:     Lib, AST, PIPsParser, Runtime, Terp, StdLib
+  other-modules:       StdLib.Helpers, StdLib.Stream, StdLib.String
   build-depends:       base >= 4.7 && < 5
                      , parsec
                      , containers
                      , split
                      , conduit-combinators
                      , bytestring
+                     , mono-traversable
+                     , time
   default-language:    Haskell2010
 
 executable pips-exe

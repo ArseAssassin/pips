@@ -4,11 +4,11 @@ module Runtime where
 import Data.List (intercalate)
 import Data.Void (Void)
 import qualified Data.Map.Lazy as Map
-import Conduit
+import Conduit (ConduitM, ResourceT)
 
-type Effect = ConduitM () Void IO ()
-type PProducer = ConduitM () PValue IO ()
-type PConsumer = ConduitM PValue Void IO ()
+type Effect = ConduitM () Void (ResourceT IO) ()
+type Producer = ConduitM () PValue (ResourceT IO) ()
+type Consumer = ConduitM PValue Void (ResourceT IO) ()
 type Object = Map.Map PValue PValue
 data Scope = Scope Object Object deriving (Eq, Ord, Show)
 type Function = Scope -> [PValue] -> PValue -> PValue
@@ -45,8 +45,8 @@ data PValue =
     PInterrupt (IO PValue, PValue -> PValue) |
     PList [PValue] |
     PEffect Effect |
-    PProducer PProducer |
-    PConsumer PConsumer |
+    PProducer Producer |
+    PConsumer Consumer |
     PBool Bool
 
 instance Eq PValue where
@@ -105,6 +105,8 @@ instance Show PValue where
     show (PInterrupt _) = "(Interrupt)"
     show (PSymbol it) = "(symbol " ++ it ++ ")"
     show (PEffect _) = "(Effect)"
+    show (PProducer _) = "(Producer)"
+    show (PConsumer _) = "(Consumer)"
 
 putInScope :: PValue -> PValue -> Scope -> Scope
 putInScope name value (Scope local parent) =
