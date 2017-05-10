@@ -2,8 +2,10 @@ module Terp (runScript) where
 
 import Data.Function ((&))
 import qualified Data.Map.Lazy as Map
+import Data.List (find, intercalate)
 
 import Text.ParserCombinators.Parsec.Pos (sourceName, sourceLine, sourceColumn, SourcePos)
+import Data.List.Split (splitOn)
 import AST
 import Runtime
 import StdLib
@@ -12,10 +14,19 @@ import PIPsParser
 
 type Interrupt = (IO PValue, PValue -> PValue)
 
+compilePath :: Object -> String -> Maybe String
+compilePath libraryPath name =
+    case libPath of
+        Just (PString it) -> Just $ (intercalate "/" (it:rest)) ++ ".pip"
+        _ -> Nothing
+    where
+        (pathId:rest) = splitOn "/" name
+        libPath = (Map.!?) libraryPath (PString pathId)
+
 runScript :: ASTNode -> Scope -> PValue -> IO PValue
 runScript it scope value =
     handleInterrupts $ eval it updatedScope value
-    where updatedScope = putInLib (PString "require") (PFunction require') scope
+    where updatedScope = putInLib (PString "require") (PFunction $ require' scope) scope
 
 handleInterrupts value =
     case value of
@@ -24,13 +35,23 @@ handleInterrupts value =
             handleInterrupts $ fn value
         it -> return it
 
-require' _ [PString name] _ =
+require' scope _ [PString name] _ =
     PInterrupt (
         do
-            script <- readFile name
-            case parsePIPs name script of
-                Left it -> return $ PThrown $ PError (PString "ParsingError") (show it)
-                Right it -> runScript it defaultScope (PScope defaultScope),
+            case findFromScope (PString "libraryPath") scope of
+                Just (PHashMap path) ->
+                    case compilePath path name of
+                        Just fileName -> do
+                            script <- readFile fileName
+                            case parsePIPs name script of
+                                Left it -> return $ PThrown $ PError (PString "ParsingError") (show it)
+                                Right it -> runScript it defaultScope (PScope defaultScope)
+                        _ -> return $ PThrown $ PError (PString "ImportError") "Couldn't find named library from path"
+
+                it -> do
+                    putStrLn (show scope)
+                    return $ PThrown $ PError (PString "ImportError") $ "Library path corrupted - expected a hash map, found instead: " ++ (show it),
+
         id
     )
 

@@ -1,0 +1,38 @@
+require '../examples/stdLib.pip, import,
+
+= ': '(fn, to args, match
+    '(case list*=, to input)
+    '(
+        = 'notVerb '(catch (meta 'verb) 'LookupError '(to False), not),
+        = 'stack (ls args takeWhile notVerb),
+
+        to args, dropWhile notVerb, list*= 'verb 'rest,
+
+        = 'newStack (to input, concat stack, verb),
+
+        to newStack, apply recur rest)
+),
+
+= 'verb '(fn, to args, head, meta 'verb True),
+
+= ':fn '(fn, to args, reverse, list*= 'body 'argNames,
+    = 'argNames (to argNames, reverse),
+    verb '(fn,
+        = 'argLen (to input, len, - (ls argNames len)),
+
+        to input,
+        = 'stack (take argLen)
+          'args (drop argLen),
+
+        apply = (ls argNames zip args, flatten),
+        body,
+        ls stack append (fromLeft))
+),
+
+= ':+ (:fn 'a 'b '(to a, + b))
+  ':* (:fn 'a 'b '(to a, * b))
+  ':dup (verb '(append (last))),
+
+= ':sqr (verb '(: :dup :*)),
+
+list, : 1 2 :+ 3 :* :sqr :sqr

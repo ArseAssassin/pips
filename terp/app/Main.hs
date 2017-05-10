@@ -3,7 +3,8 @@ module Main where
 import System.Environment (getArgs)
 
 import Text.ParserCombinators.Parsec
-import Lib (parsePIPs, runScript, PValue(PError, PEffect, PScope, PString), defaultScope, unmeta, ASTNode)
+import Utils (getDefaultScope)
+import Lib (parsePIPs, runScript, PValue(PError, PEffect, PScope, PString, PHashMap), defaultScope, unmeta, ASTNode, putInLib)
 
 import Pipes
 
@@ -29,7 +30,8 @@ execAst ast value = do
         Left e -> do putStrLn "Error parsing input:"
                      print e
         Right it -> do
-            result <- runScript it defaultScope value
+            scope <- getDefaultScope
+            result <- runScript it scope value
 
             exec result
 
@@ -41,5 +43,5 @@ execTerp (ExecFile filename) = do
 
 execTerp (ProcessStdin script) = do
     input <- getContents
-    let s = "'(= 'input _input), require '../examples/stdLib.pip, import, to input, " ++ script ++ ", unmeta"
+    let s = "'(= 'input _input), require 'lib/stdLib, import, to input, " ++ script ++ ", unmeta"
     execAst (parsePIPs "Command line arg" (s ++ "\n")) (PString input)
