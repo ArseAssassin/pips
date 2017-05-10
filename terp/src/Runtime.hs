@@ -2,13 +2,13 @@
 module Runtime where
 
 import Data.List (intercalate)
-import Data.Void (Void)
 import qualified Data.Map.Lazy as Map
-import Conduit (ConduitM, ResourceT)
+import Pipes
 
-type Effect = ConduitM () Void (ResourceT IO) ()
-type Producer = ConduitM () PValue (ResourceT IO) ()
-type Consumer = ConduitM PValue Void (ResourceT IO) ()
+-- type PEffect = ConduitM () Void (ResourceT IO) ()
+type PProducer = Producer PValue IO ()
+type PConsumer = Consumer PValue IO ()
+type PEffect = Effect IO ()
 type Object = Map.Map PValue PValue
 data Scope = Scope Object Object deriving (Eq, Ord, Show)
 type Function = Scope -> [PValue] -> PValue -> PValue
@@ -44,9 +44,9 @@ data PValue =
     PFunction Function |
     PInterrupt (IO PValue, PValue -> PValue) |
     PList [PValue] |
-    PEffect Effect |
-    PProducer Producer |
-    PConsumer Consumer |
+    PEffect (IO PEffect) |
+    PProducer (IO PProducer) |
+    PConsumer PConsumer |
     PBool Bool
 
 instance Eq PValue where
@@ -90,7 +90,7 @@ instance Ord PValue where
 
 instance Show PValue where
     show (PNum it) = (show it)
-    show (PString it) = it
+    show (PString it) = '"' : it ++ "\""
     show (PError value it) = "(Error " ++ (show value) ++ " " ++ it ++ ")"
     show (PThrown it) = "(UncaughtError " ++ (show it) ++ ")"
     show (PScope (Scope locals _)) = "(Scope " ++ (showObject locals) ++ ")"

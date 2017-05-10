@@ -44,6 +44,8 @@ extra-deps:
 - haskeline-0.7.3.1
 - containers-0.5.10.2
 - conduit-combinators-1.1.1
+- pipes-4.3.2
+- pipes-concurrency-2.0.7
 
 # Override default flag values for local packages and extra-deps
 flags: {}

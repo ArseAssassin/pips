@@ -12,9 +12,9 @@ import PIPsParser
 
 type Interrupt = (IO PValue, PValue -> PValue)
 
-runScript :: ASTNode -> Scope -> IO PValue
-runScript it scope =
-    handleInterrupts $ eval it updatedScope (PScope updatedScope)
+runScript :: ASTNode -> Scope -> PValue -> IO PValue
+runScript it scope value =
+    handleInterrupts $ eval it updatedScope value
     where updatedScope = putInLib (PString "require") (PFunction require') scope
 
 handleInterrupts value =
@@ -30,7 +30,7 @@ require' _ [PString name] _ =
             script <- readFile name
             case parsePIPs name script of
                 Left it -> return $ PThrown $ PError (PString "ParsingError") (show it)
-                Right it -> runScript it defaultScope,
+                Right it -> runScript it defaultScope (PScope defaultScope),
         id
     )
 

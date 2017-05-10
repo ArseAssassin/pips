@@ -1,4 +1,4 @@
-module Lib (parsePIPs, runScript, PValue(PError, PAssignScope, PEffect), defaultScope, unmeta, Scope, ASTNode, mergeScopes) where
+module Lib (parsePIPs, runScript, PValue(PError, PAssignScope, PEffect, PScope, PString), defaultScope, unmeta, Scope, ASTNode, mergeScopes) where
 
 import PIPsParser
 import AST

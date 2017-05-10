@@ -4,7 +4,7 @@ import System.Console.Haskeline
 import Data.Char (isSpace)
 import Control.Monad.IO.Class (liftIO)
 
-import Lib (parsePIPs, runScript, PValue(PError, PAssignScope), defaultScope, mergeScopes)
+import Lib (parsePIPs, runScript, PValue(PError, PAssignScope, PScope), defaultScope, mergeScopes)
 
 trim = f . f
     where f = reverse . dropWhile isSpace
@@ -32,7 +32,7 @@ main = runInputT defaultSettings $ loop defaultScope
                     loop scope
 
                 Right it -> do
-                    result <- liftIO (runScript it scope)
+                    result <- liftIO (runScript it scope (PScope scope))
                     case result of
                         PError typeName it -> do
                             outputStrLn $ (show $ typeName) ++ ": \n" ++ it
@@ -43,6 +43,6 @@ main = runInputT defaultSettings $ loop defaultScope
                             loop $ mergeScopes newScope scope
 
                         it -> do
-                            outputStrLn $ show $ it
+                            outputStrLn $ "  " ++ (show it)
                             outputStrLn ""
                             loop scope

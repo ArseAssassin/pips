@@ -148,4 +148,26 @@
         '(to input)
 ),
 
+= 'reverse '(fn, to input, match
+    '(case list*= 'a 'rest, to rest, recur, append a)
+    '(case list*=, list)
+),
+
+= 'split*= '(fn, args= 'n 'x 'xs,
+    to input,
+    = x (take n)
+      xs (drop n)
+),
+
+= 'lines '(split "
+"),
+
+= 'unlines '(join "
+"),
+
+= 'words '(split " "),
+= 'unwords '(split " "),
+
+= '! '(fn, to args, list*= 'else 'fn 'args, to input, catch (apply fn args) '(to else)),
+
 to scope

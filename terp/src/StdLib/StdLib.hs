@@ -25,15 +25,28 @@ ne _ (arg:[]) val = PBool $ not $ unmeta arg == unmeta val
 range _ ((PNum max):[]) (PNum i) =
     PList $ map PNum [i..max]
 
+show' (PString it) = it
+show' (PMeta _ _ it) = show' it
+show' other = show other
+
 join :: Function
+join scope [PMeta _ _ glue] args =
+    join scope [glue] args
+
+join scope args (PList (PMeta _ _ a:xs)) =
+    join scope args (PList (a:xs))
+join scope args (PList (a:PMeta _ _ b:xs)) =
+    join scope args (PList (a:b:xs))
+
 join scope args@(PString glue:[]) (PList ((PString a):(PString b):xs)) =
     join scope args (PList ((PString (a ++ glue ++ b)) : xs))
+join _ _ (PList [PMeta _ _ it@(PString _)]) = it
 join _ _ (PList [it]) = it
 join _ args val = argError "join" "List, String" args val
 
 
 str _ [] value = PString $ show value
-str scope values _ = join scope [PString ""] (PList (map (PString . show) values))
+str scope values _ = join scope [PString ""] (PList (map (PString . show') values))
 
 flatten' :: Function
 flatten' scope [] (PList ((PList a):(PList b):xs)) =
@@ -188,7 +201,6 @@ defaultExpressions =
         (".", getElement),
         ("prepend", prepend),
         ("append", append'),
-        ("head", head'),
         ("tail", tail'),
         ("last", last'),
         ("len", len),
@@ -204,7 +216,6 @@ defaultExpressions =
         ("mod", mod'),
         ("range", range),
         ("flatten", flatten'),
-        ("list", list'),
         ("hashmap", hashMap),
         ("isNum", isNum),
         ("isString", isString),
@@ -325,10 +336,16 @@ assign scope args _ =
     else PAssignScope $ Scope (Map.fromList $ put' args) Map.empty
 
 
-catch scope (error@(PThrown e@(PError typeName _)):caughtType:(PFunction fn):[]) value =
+catch scope (error@(PThrown e@(PError typeName _)):caughtType:(PFunction fn):[]) _ =
     if typeName == caughtType
         then fn emptyScope [] e
         else error
+
+catch scope (error@(PThrown e@(PError _ _)):(PFunction fn):[]) _ =
+    fn emptyScope [] e
+
+catch scope (value:_:[]) _ =
+    value
 
 catch scope (value:_:_:[]) _ =
     value
@@ -413,6 +430,8 @@ bareExpressions =
 
         ("and", PFunction $ unmetaValue and'),
         ("or", PFunction $ passArgErrors $ unmetaValue or'),
+        ("list", PFunction list'),
+        ("head", PFunction $ unmetaValue head'),
         ("if", PFunction if'),
         ("to", PFunction $ passArgErrors to),
         ("log", PFunction (\_ args val -> PInterrupt (
@@ -423,7 +442,7 @@ bareExpressions =
     ]
 
 
-defaultValues = quoteNames [("True", PBool True), ("False", PBool False)]
+defaultValues = quoteNames [("True", PBool True), ("False", PBool False), ("\\n", (PString "\n"))]
 
 defaultLib :: Scope
 defaultLib = Scope Map.empty $ Map.fromList $ concat [defaultExpressions, defaultValues, metaExpressions, bareExpressions, scopeExpressions, streamValues]
